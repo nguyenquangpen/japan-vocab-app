@@ -224,7 +224,7 @@ Nguyên tắc:
 ## 12. Quyết định khi làm
 
 - Chuyển tab bằng state của React, không dùng thư viện router.
-- Font hệ thống (`Yu Gothic UI`, `Meiryo`), không tải font qua mạng.
+- Font hệ thống `"Segoe UI", "Yu Gothic UI", "Meiryo"`, không tải font qua mạng. Segoe UI phải đứng đầu: Yu Gothic UI thiếu chữ tiếng Việt 2 dấu (ố, ễ, ầ) nên hiển thị dấu rời.
 - CSP bản build: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. `devCsp` nới thêm inline script và websocket HMR cho Vite, chỉ dùng khi `tauri dev`.
 - Dev server của Vite chỉ nghe `localhost:1420`, chỉ chạy khi phát triển. Bản build không mở cổng.
 - Capabilities: `core:default`, `sql:default`, `sql:allow-execute`, `clipboard-manager:allow-write-text`. Đã gỡ plugin `opener` có sẵn trong template.
@@ -243,3 +243,13 @@ Nguyên tắc:
 - **Giới hạn:** term 50, reading 50, tối đa 5 nghĩa × 100 ký tự, từ loại 50, cách dùng 500, ghi chú 1000.
 - **Kho từ:** tìm theo term/reading/nghĩa (LIKE, có escape `%` `_`), lọc "chỉ từ chờ bổ sung", từ mới nhất lên đầu. Lọc "đang học / vững" làm ở giai đoạn 4, lọc chủ đề ở giai đoạn 5. Ví dụ và từ dễ nhầm chỉ hiển thị, chưa sửa tay.
 - **Xóa từ:** bấm 2 lần ("Xóa từ" → "Bấm lần nữa để xóa"), không dùng hộp thoại.
+
+### Giai đoạn 3 (copy–paste bổ sung từ)
+
+- Khu "Chờ bổ sung" nằm cuối tab Thêm từ. Lô = các từ đang chọn (mặc định 30 từ chờ bổ sung mới nhất, tối đa 30). Kết quả dán vào được ghép với lô đang chọn.
+- Đọc kết quả: bỏ ```json, lấy đoạn từ `{` đầu tiên tới `}` cuối cùng (ChatGPT hay thêm câu dẫn), rồi `JSON.parse` + `zod`. Lỗi nêu rõ "Từ thứ N (term): ..." (tối đa 5 lỗi). Có lỗi thì không lưu gì.
+- Schema thêm giới hạn cho trường design chưa nói: `part_of_speech` 50, `examples.reading` 200, `confusables.term` 30, `confusables.note` 200. `examples`/`confusables` thiếu thì coi là mảng rỗng. `zod` chạy `jitless` (không dùng `new Function`).
+- Ghép theo `term` sau NFKC. Lô có 2 từ cùng chữ thì dùng `reading` của AI để phân biệt.
+- Xem trước chỉ hiện trường AI có gợi ý khác hiện tại. Trường hiện tại trống thì mặc định dùng AI, trường đã có thì mặc định giữ (tick để ghi đè). Ghi chú của tôi không bao giờ bị AI ghi đè.
+- Lưu (`saveEnrichment`): kiểm tra trùng cách đọc → thay ví dụ (xóa rồi chèn 1 câu) → cập nhật từ + `enriched = 1` sau cùng. Lỗi giữa chừng thì từ vẫn ở "Chờ bổ sung", lưu lại không nhân đôi ví dụ.
+- Module `settings` (`loadSettings`) đọc bảng settings, giá trị hỏng thì dùng mặc định. Màn Cài đặt vẫn để giai đoạn 6.

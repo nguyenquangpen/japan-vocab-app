@@ -1,5 +1,12 @@
 import type { Db } from "../db/db";
-import { cleanWord, normalizeText, parseBatchLine, splitMeanings, type CleanWord } from "./text";
+import {
+  cleanWord,
+  normalizeText,
+  optionalText,
+  parseBatchLine,
+  splitMeanings,
+  type CleanWord,
+} from "./text";
 
 /**
  * Kho từ. Mọi chuẩn hóa (NFKC), kiểm tra hợp lệ và chống trùng nằm ở đây.
@@ -172,11 +179,82 @@ export async function updateWord(
 
   const [self] = await db.select<{ id: number }>("SELECT id FROM words WHERE id = ?", [id]);
   if (!self) return { status: "not_found" };
+  return { status: "duplicate", wordId: (await findOtherSameWord(db, id, w)) ?? id };
+}
+
+async function findOtherSameWord(db: Db, id: number, w: CleanWord): Promise<number | null> {
   const [other] = await db.select<{ id: number }>(
     `SELECT id FROM words WHERE id != ? AND ${SAME_WORD} ORDER BY id LIMIT 1`,
     [id, w.term, w.reading, w.reading],
   );
-  return { status: "duplicate", wordId: other.id };
+  return other?.id ?? null;
+}
+
+export interface EnrichmentData {
+  reading: string | null;
+  meanings: string[];
+  partOfSpeech: string | null;
+  usageNote: string | null;
+  confusables: { term: string; note: string }[];
+  /** null = giữ nguyên ví dụ hiện có. */
+  examples: { ja: string; reading: string | null; vi: string | null }[] | null;
+}
+
+/**
+ * Ghi kết quả bổ sung (đã chọn trường) và đặt enriched = 1.
+ * Thứ tự ghi để chạy lại được nếu lỗi giữa chừng: thay ví dụ trước, cập nhật từ sau cùng.
+ */
+export async function saveEnrichment(
+  db: Db,
+  id: number,
+  data: EnrichmentData,
+  now = new Date(),
+): Promise<UpdateResult> {
+  const [row] = await db.select<{ term: string }>("SELECT term FROM words WHERE id = ?", [id]);
+  if (!row) return { status: "not_found" };
+
+  const cleaned = cleanWord({
+    term: row.term,
+    reading: data.reading,
+    meanings: data.meanings,
+    partOfSpeech: data.partOfSpeech,
+    usageNote: data.usageNote,
+  });
+  if (!cleaned.ok) return { status: "invalid", message: cleaned.message };
+  const w = cleaned.word;
+
+  const duplicate = await findOtherSameWord(db, id, w);
+  if (duplicate !== null) return { status: "duplicate", wordId: duplicate };
+
+  if (data.examples !== null) {
+    await db.execute("DELETE FROM examples WHERE word_id = ?", [id]);
+    const examples = data.examples
+      .map((e) => ({ ja: normalizeText(e.ja), reading: optionalText(e.reading), vi: optionalText(e.vi) }))
+      .filter((e) => e.ja !== "");
+    if (examples.length > 0) {
+      await db.execute(
+        `INSERT INTO examples (word_id, ja, reading, vi) VALUES ${examples.map(() => "(?, ?, ?, ?)").join(", ")}`,
+        examples.flatMap((e) => [id, e.ja, e.reading, e.vi]),
+      );
+    }
+  }
+
+  const confusables = data.confusables
+    .map((c) => ({ term: normalizeText(c.term), note: normalizeText(c.note) }))
+    .filter((c) => c.term !== "");
+
+  const { rowsAffected } = await db.execute(
+    `UPDATE words SET reading = ?, meanings_vi = ?, part_of_speech = ?, usage_note = ?,
+       confusables = ?, enriched = 1, updated_at = ?
+     WHERE id = ? AND NOT EXISTS (SELECT 1 FROM words WHERE id != ? AND ${SAME_WORD})`,
+    [
+      w.reading, encodeMeanings(w.meanings), w.partOfSpeech, w.usageNote,
+      confusables.length > 0 ? JSON.stringify(confusables) : null, now.toISOString(),
+      id, id, w.term, w.reading, w.reading,
+    ],
+  );
+  if (rowsAffected > 0) return { status: "updated" };
+  return { status: "duplicate", wordId: (await findOtherSameWord(db, id, w)) ?? id };
 }
 
 /** Xóa từ, kéo theo ví dụ, thẻ, lịch sử ôn và liên kết chủ đề. Trả về false nếu không có từ. */

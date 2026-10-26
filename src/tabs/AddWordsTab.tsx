@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Db } from "../db/db";
 import { addWord, addWordsBatch, type BatchResult } from "../vocab/vocab";
+import EnrichPanel from "./EnrichPanel";
 
 interface Props {
   db: Db;
@@ -8,16 +9,20 @@ interface Props {
 }
 
 export default function AddWordsTab({ db, onOpenWord }: Props) {
+  const [version, setVersion] = useState(0);
+  const onAdded = () => setVersion((v) => v + 1);
+
   return (
     <section className="stack">
       <h1>Thêm từ</h1>
-      <SingleWordForm db={db} onOpenWord={onOpenWord} />
-      <BatchForm db={db} />
+      <SingleWordForm db={db} onOpenWord={onOpenWord} onAdded={onAdded} />
+      <BatchForm db={db} onAdded={onAdded} />
+      <EnrichPanel db={db} version={version} />
     </section>
   );
 }
 
-function SingleWordForm({ db, onOpenWord }: Props) {
+function SingleWordForm({ db, onOpenWord, onAdded }: Props & { onAdded: () => void }) {
   const [term, setTerm] = useState("");
   const [reading, setReading] = useState("");
   const [meanings, setMeanings] = useState("");
@@ -40,6 +45,7 @@ function SingleWordForm({ db, onOpenWord }: Props) {
         return;
       }
       setMessage({ kind: "ok", text: `Đã thêm ${term.trim()}` });
+      onAdded();
       setTerm("");
       setReading("");
       setMeanings("");
@@ -86,7 +92,7 @@ function SingleWordForm({ db, onOpenWord }: Props) {
   );
 }
 
-function BatchForm({ db }: { db: Db }) {
+function BatchForm({ db, onAdded }: { db: Db; onAdded: () => void }) {
   const [text, setText] = useState("");
   const [result, setResult] = useState<BatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +105,7 @@ function BatchForm({ db }: { db: Db }) {
     try {
       const batch = await addWordsBatch(db, text);
       setResult(batch);
+      if (batch.added.length > 0) onAdded();
       // Giữ lại các dòng lỗi để sửa tiếp.
       setText(batch.invalid.map((i) => i.line).join("\n"));
     } catch (e) {
