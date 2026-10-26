@@ -1,6 +1,6 @@
 [package]
 name = "japan-vocab-app"
-version = "0.1.0"
+version = "1.0.0"
 description = "Personal Japanese vocabulary app"
 authors = ["quangnt"]
 edition = "2024"

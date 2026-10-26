@@ -39,10 +39,22 @@ export default function QuizPanel({ db }: { db: Db }) {
     const correct = stage.answers.filter((a) => a.correct).length;
     const wrong = stage.questions.filter((q) => !stage.answers.find((a) => a.wordId === q.wordId)?.correct);
     return (
-      <div className="stack quiz">
-        <p className="success">
-          Xong: đúng {correct}/{stage.answers.length}.
-        </p>
+      <div className="stack quiz card-enter">
+        <p className="session-title">Xong quiz! 🎯</p>
+        <div className="stat-tiles">
+          <div className="stat-tile">
+            <span className="stat-value">{stage.answers.length}</span>
+            <span className="stat-label">Câu hỏi</span>
+          </div>
+          <div className="stat-tile good">
+            <span className="stat-value">{correct}</span>
+            <span className="stat-label">Đúng</span>
+          </div>
+          <div className="stat-tile bad">
+            <span className="stat-value">{stage.answers.length - correct}</span>
+            <span className="stat-label">Sai</span>
+          </div>
+        </div>
         {stage.saveError && <p className="error">Không lưu được kết quả: {stage.saveError}</p>}
         {wrong.length > 0 && (
           <div className="card stack">
@@ -201,8 +213,11 @@ function QuizRun({ questions, onFinish }: { questions: Question[]; onFinish: (an
   });
 
   return (
-    <div className="review-card stack quiz">
-      <span className="muted small">
+    <div className="review-card stack quiz card-enter" key={index}>
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${(answers.length / questions.length) * 100}%` }} />
+      </div>
+      <span className="card-label">
         Câu {index + 1}/{questions.length} · Nghĩa của từ này?
       </span>
       <div className="jp review-term">{question.term}</div>
@@ -213,7 +228,7 @@ function QuizRun({ questions, onFinish }: { questions: Question[]; onFinish: (an
             picked === null ? "" : i === question.answerIndex ? "correct" : i === picked ? "wrong" : "";
           return (
             <button key={i} className={`quiz-option ${state}`} onClick={() => choose(i)} disabled={picked !== null}>
-              <span className="muted">{i + 1}.</span> {option}
+              <span className="grade-key">{i + 1}</span> {option}
             </button>
           );
         })}

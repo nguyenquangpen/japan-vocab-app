@@ -89,7 +89,7 @@ export default function ReviewTab({ db }: Props) {
 
   return (
     <section className="review stack">
-      <p className="muted small">Còn {queue.length} thẻ trong phiên</p>
+      <SessionProgress done={stats.reviewed} remaining={queue.length} />
       {current.skill === "meaning" ? (
         <MeaningCard
           key={`${current.cardId}-${stats.reviewed}`}
@@ -153,25 +153,39 @@ function MeaningCard({ db, item, gradeButtons, onRecord, onGraded }: CardProps &
   }, [flipped, grades, grade]);
 
   return (
-    <div className="review-card stack">
-      <span className="muted small">Nghĩa của từ này?</span>
-      <div className="jp review-term">{item.term}</div>
-      {item.readingLearned && !flipped && <div className="jp review-reading">{item.reading}</div>}
-      {!flipped ? (
-        <button className="primary" onClick={() => setFlipped(true)}>
-          Lật thẻ (Space)
-        </button>
-      ) : (
-        <>
-          <Answer item={item} />
-          <div className="row grade-row">
-            {grades.map((g, i) => (
-              <button key={g.rating} className={g.rating === Rating.Again ? "danger" : "primary"} onClick={() => void grade(g.rating)}>
-                {g.label} ({i + 1})
-              </button>
-            ))}
+    <div className="stack card-enter">
+      <div className="flip-scene">
+        <div
+          className={flipped ? "flip-card flipped" : "flip-card"}
+          onClick={() => setFlipped(true)}
+          role="button"
+          aria-label="Lật thẻ"
+        >
+          <div className="flip-face flip-front review-card stack">
+            <span className="card-label">Nghĩa của từ này?</span>
+            <div className="jp review-term">{item.term}</div>
+            {item.readingLearned && <div className="jp review-reading">{item.reading}</div>}
+            <span className="flip-hint">Bấm vào thẻ hoặc Space để lật</span>
           </div>
-        </>
+          <div className="flip-face flip-back review-card stack" aria-hidden={!flipped}>
+            <div className="jp review-term small-term">{item.term}</div>
+            <Answer item={item} />
+          </div>
+        </div>
+      </div>
+      {flipped && (
+        <div className="row grade-row fade-in">
+          {grades.map((g, i) => (
+            <button
+              key={g.rating}
+              className={`grade-button grade-${g.rating}`}
+              onClick={() => void grade(g.rating)}
+            >
+              <span className="grade-key">{i + 1}</span>
+              {g.label}
+            </button>
+          ))}
+        </div>
       )}
       {error && <p className="error">{error}</p>}
     </div>
@@ -219,21 +233,23 @@ function ReadingCard({ db, item, onRecord, onGraded }: CardProps) {
     void check();
   }
 
+  const verdict = result === null ? "" : result.correct ? "is-correct" : "is-wrong";
+
   return (
-    <div className="review-card stack">
+    <div className={`review-card stack card-enter ${verdict}`}>
       {item.kanaOnly ? (
         <>
-          <span className="muted small">Gõ từ có nghĩa:</span>
+          <span className="card-label">Gõ từ có nghĩa:</span>
           <div className="review-meanings">{item.meanings.join("; ")}</div>
         </>
       ) : (
         <>
-          <span className="muted small">Cách đọc của từ này?</span>
+          <span className="card-label">Cách đọc của từ này?</span>
           <div className="jp review-term">{item.term}</div>
         </>
       )}
       <input
-        className="jp review-input"
+        className={`jp review-input ${verdict}`}
         value={input}
         onChange={(e) => setInput(romajiToKanaWhileTyping(e.target.value))}
         onKeyDown={onKeyDown}
@@ -243,8 +259,8 @@ function ReadingCard({ db, item, onRecord, onGraded }: CardProps) {
       />
       {result && (
         <>
-          <p className={result.correct ? "success" : "error"}>
-            {result.correct ? "Đúng!" : <>Sai. Đáp án: <span className="jp">{expected}</span></>}
+          <p className={`verdict ${result.correct ? "success" : "error"}`}>
+            {result.correct ? "✓ Đúng!" : <>✗ Sai. Đáp án: <span className="jp">{expected}</span></>}
           </p>
           <Answer item={item} />
           <button className="primary" onClick={() => onGraded(result.graded)}>
@@ -253,6 +269,21 @@ function ReadingCard({ db, item, onRecord, onGraded }: CardProps) {
         </>
       )}
       {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
+function SessionProgress({ done, remaining }: { done: number; remaining: number }) {
+  const total = done + remaining;
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+  return (
+    <div className="session-progress">
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${percent}%` }} />
+      </div>
+      <span className="muted small">
+        Đã ôn {done} · còn {remaining} thẻ
+      </span>
     </div>
   );
 }
@@ -296,14 +327,23 @@ function SessionEnd({ db, stats, level, onReload }: { db: Db; stats: Stats; leve
   }, [db]);
 
   return (
-    <section className="stack">
+    <section className="stack session-end card-enter">
       <h1>Ôn tập</h1>
       {stats.reviewed === 0 ? (
-        <p>Không có thẻ nào cần ôn lúc này.</p>
+        <div className="empty-state">
+          <div className="empty-mark jp">休</div>
+          <p>Không có thẻ nào cần ôn lúc này.</p>
+        </div>
       ) : (
-        <p className="success">
-          Hết phiên: đã ôn {stats.reviewed} lượt, đúng {stats.correct}, sai {stats.reviewed - stats.correct}.
-        </p>
+        <>
+          <p className="session-title">Hết phiên! 🎉</p>
+          <div className="stat-tiles">
+            <StatTile label="Lượt ôn" value={stats.reviewed} />
+            <StatTile label="Đúng" value={stats.correct} tone="good" />
+            <StatTile label="Sai" value={stats.reviewed - stats.correct} tone="bad" />
+            <StatTile label="Tỉ lệ đúng" value={`${Math.round((stats.correct / stats.reviewed) * 100)}%`} />
+          </div>
+        </>
       )}
       {stats.mistakes.length > 0 && (
         <div className="card stack">
@@ -339,5 +379,14 @@ function SessionEnd({ db, stats, level, onReload }: { db: Db; stats: Stats; leve
         <button onClick={onReload}>Tải lại phiên ôn</button>
       </div>
     </section>
+  );
+}
+
+function StatTile({ label, value, tone }: { label: string; value: number | string; tone?: "good" | "bad" }) {
+  return (
+    <div className={`stat-tile ${tone ?? ""}`}>
+      <span className="stat-value">{value}</span>
+      <span className="stat-label">{label}</span>
+    </div>
   );
 }

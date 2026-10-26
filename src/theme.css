@@ -1,0 +1,504 @@
+/* Trang trí & animation. Nạp sau App.css nên ghi đè được các giá trị cơ bản. */
+
+:root {
+  --accent: #4f5bd5;
+  --accent-soft: #eef0fd;
+  --good: #1a7f37;
+  --good-soft: #e6f6ea;
+  --bad: #c2352b;
+  --bad-soft: #fdecea;
+  --surface: #ffffff;
+  --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 4px 16px rgb(15 23 42 / 6%);
+  --shadow-lg: 0 2px 4px rgb(15 23 42 / 6%), 0 12px 32px rgb(79 91 213 / 14%);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  background: transparent;
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 100% -10%, #fbe7ee 0%, transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, #e8ebfd 0%, transparent 60%),
+    #f6f7fb;
+}
+
+/* Thanh điều hướng */
+.tabs {
+  align-items: center;
+  gap: 2px;
+  padding: 0 16px;
+  background: rgb(255 255 255 / 85%);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 0 var(--border);
+  border-bottom: none;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 16px;
+  font-weight: 700;
+  color: #1f2328;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  font-size: 1.05rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), #c06c9a);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgb(79 91 213 / 35%);
+}
+
+.tab {
+  position: relative;
+  padding: 14px 16px;
+  border-bottom: none;
+  transition: color 0.2s;
+}
+
+.tab::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  transform: scaleX(0);
+  transition: transform 0.25s var(--ease);
+}
+
+.tab.active::after {
+  transform: scaleX(1);
+}
+
+.tab-page {
+  height: 100%;
+  animation: page-in 0.28s var(--ease);
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Nút */
+button {
+  transition:
+    transform 0.12s var(--ease),
+    box-shadow 0.2s,
+    background-color 0.2s,
+    border-color 0.2s;
+}
+
+button:not(:disabled):hover {
+  border-color: #b9bfe9;
+}
+
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+button.primary:not(:disabled):hover {
+  background: #4350c4;
+  box-shadow: 0 4px 12px rgb(79 91 213 / 30%);
+}
+
+button.danger:not(:disabled):hover {
+  box-shadow: 0 4px 12px rgb(194 53 43 / 25%);
+}
+
+.card,
+.word-list {
+  border-color: #e3e6ef;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.word-item {
+  transition: background-color 0.15s;
+}
+
+.chip {
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    transform 0.12s var(--ease);
+}
+
+.chip:active {
+  transform: scale(0.96);
+}
+
+.chip.active,
+.word-item.active {
+  background: var(--accent-soft);
+}
+
+.badge {
+  animation: fade-in 0.3s;
+}
+
+/* Thẻ ôn */
+.review-card {
+  border-color: #e3e6ef;
+  border-radius: 18px;
+  box-shadow: var(--shadow-lg);
+}
+
+.card-enter {
+  animation: card-in 0.35s var(--ease);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+
+.card-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.fade-in {
+  animation: fade-in 0.3s var(--ease);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Flashcard lật 3D: 2 mặt chồng trong 1 ô lưới nên thẻ cao bằng mặt cao hơn. */
+.flip-scene {
+  perspective: 1400px;
+}
+
+.flip-card {
+  display: grid;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 0.6s var(--ease);
+}
+
+.flip-card.flipped {
+  cursor: default;
+  transform: rotateY(180deg);
+}
+
+.flip-card:not(.flipped):hover {
+  transform: translateY(-3px);
+}
+
+.flip-face {
+  grid-area: 1 / 1;
+  justify-content: center;
+  min-height: 300px;
+  backface-visibility: hidden;
+}
+
+.flip-front {
+  background:
+    radial-gradient(400px 200px at 100% 0%, #fdf0f4 0%, transparent 70%),
+    var(--surface);
+}
+
+.flip-back {
+  transform: rotateY(180deg);
+  background:
+    radial-gradient(400px 200px at 0% 100%, var(--accent-soft) 0%, transparent 70%),
+    var(--surface);
+}
+
+.flip-hint {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  animation: hint-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes hint-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.small-term {
+  font-size: 1.8rem;
+}
+
+.review-term {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Nút chấm: 1 Quên, 2 Khó/Nhớ, 3 Nhớ, 4 Dễ (theo giá trị Rating). */
+.grade-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  padding: 10px 18px;
+  font-weight: 600;
+  border-width: 2px;
+  border-radius: 12px;
+}
+
+.grade-key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: #f1f3f8;
+  border-radius: 6px;
+}
+
+.grade-1 {
+  color: var(--bad);
+  border-color: #f3c4c0;
+}
+
+.grade-1:not(:disabled):hover {
+  background: var(--bad-soft);
+  border-color: var(--bad);
+}
+
+.grade-2 {
+  color: #b26a00;
+  border-color: #f2d9b0;
+}
+
+.grade-2:not(:disabled):hover {
+  background: #fff6e8;
+  border-color: #b26a00;
+}
+
+.grade-3 {
+  color: var(--good);
+  border-color: #b8e0c2;
+}
+
+.grade-3:not(:disabled):hover {
+  background: var(--good-soft);
+  border-color: var(--good);
+}
+
+.grade-4 {
+  color: var(--accent);
+  border-color: #c9cdf3;
+}
+
+.grade-4:not(:disabled):hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* Ô gõ cách đọc */
+.review-input {
+  border-width: 2px;
+  border-radius: 12px;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+
+.review-input.is-correct {
+  color: var(--good);
+  background: var(--good-soft);
+  border-color: var(--good);
+  animation: pop 0.35s var(--ease);
+}
+
+.review-input.is-wrong {
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-color: var(--bad);
+  animation: shake 0.4s;
+}
+
+.verdict {
+  font-weight: 600;
+  animation: fade-in 0.25s var(--ease);
+}
+
+@keyframes pop {
+  40% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+/* Tiến độ */
+.session-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  background: #e6e8f2;
+  border-radius: 999px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #c06c9a);
+  border-radius: inherit;
+  transition: width 0.4s var(--ease);
+}
+
+/* Hết phiên */
+.session-end {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.session-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 8px;
+  background: var(--surface);
+  border: 1px solid #e3e6ef;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  animation: card-in 0.4s var(--ease) both;
+}
+
+.stat-tile:nth-child(2) {
+  animation-delay: 0.06s;
+}
+
+.stat-tile:nth-child(3) {
+  animation-delay: 0.12s;
+}
+
+.stat-tile:nth-child(4) {
+  animation-delay: 0.18s;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-tile.good .stat-value {
+  color: var(--good);
+}
+
+.stat-tile.bad .stat-value {
+  color: var(--bad);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted);
+}
+
+.empty-mark {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  font-size: 2.6rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 50%;
+  animation: float 3.5s ease-in-out infinite;
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Quiz */
+.quiz-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-width: 2px;
+  border-radius: 12px;
+}
+
+.quiz-option:not(:disabled):hover {
+  background: var(--accent-soft);
+  transform: translateX(3px);
+}
+
+.quiz-option.correct {
+  color: var(--good);
+  background: var(--good-soft);
+  border-color: var(--good);
+  animation: pop 0.35s var(--ease);
+}
+
+.quiz-option.wrong {
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-color: var(--bad);
+  animation: shake 0.4s;
+}
+
+/* Tôn trọng cài đặt giảm chuyển động của Windows. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

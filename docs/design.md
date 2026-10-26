@@ -280,3 +280,10 @@ Nguyên tắc:
 
 - Nút "Copy prompt giải thích lỗi sai" ở màn hết phiên (khi có câu sai). Prompt gồm level, mỗi từ sai 1 dòng: term, cách đọc đúng, nghĩa đúng, kỹ năng (cách đọc: kèm câu đã gõ; nghĩa: "tự chấm là quên"). Bỏ dòng lặp (cùng từ, kỹ năng, câu gõ). Yêu cầu giải thích, mẹo nhớ, chỉ ra từ đang nhầm, 1 câu ví dụ, gom các từ dễ nhầm. Không dán kết quả lại vào app.
 - Màn Cài đặt: trình độ N5–N1, từ mới mỗi ngày 0–100, thẻ ôn tối đa mỗi phiên 1–1000, nút chấm 2 hoặc 4. `saveSettings` kiểm tra rồi ghi cả 4 key bằng 1 câu `INSERT ... ON CONFLICT DO UPDATE`. Áp dụng từ phiên ôn tiếp theo.
+
+### Trang trí + đóng gói (sau giai đoạn 6, đã được đồng ý)
+
+- Trang trí nằm riêng trong `src/theme.css` (nạp sau `App.css`), chỉ dùng CSS, không thêm thư viện. Tông chàm–hồng, nền gradient nhẹ, logo 語 trên thanh điều hướng.
+- Animation: thẻ nghĩa là flashcard lật 3D (Space hoặc bấm vào thẻ), thẻ mới trượt vào, thanh tiến độ phiên ôn/quiz, ô gõ cách đọc rung khi sai và nảy khi đúng, đáp án quiz đổi màu + rung/nảy, ô thống kê cuối phiên, chuyển tab mờ dần, gạch chân tab trượt. Tắt hết khi Windows bật "giảm chuyển động" (`prefers-reduced-motion`).
+- Icon app: `app-icon.png` (1024px, vẽ bằng System.Drawing, chữ 語 trên nền gradient), sinh bộ icon bằng `npx tauri icon app-icon.png` (xóa thư mục android/ios sinh kèm).
+- Đóng gói: chỉ NSIS (`.exe`), `installMode: currentUser` (không cần quyền Admin), phiên bản 1.0.0. Bộ cài nằm ở `src-tauri/target/release/bundle/nsis/`. Dữ liệu ở `%APPDATA%\com.quangnt.japanvocab\vocab.db`, gỡ app không xóa file này.

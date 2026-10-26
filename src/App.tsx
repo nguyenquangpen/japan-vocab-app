@@ -6,6 +6,7 @@ import LibraryTab from "./tabs/LibraryTab";
 import ReviewTab from "./tabs/ReviewTab";
 import SettingsTab from "./tabs/SettingsTab";
 import "./App.css";
+import "./theme.css";
 
 const TABS = [
   { id: "review", label: "Ôn tập" },
@@ -40,6 +41,10 @@ export default function App() {
   return (
     <div className="app">
       <nav className="tabs">
+        <span className="brand">
+          <span className="brand-mark jp">語</span>
+          Japan Vocab
+        </span>
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -56,14 +61,14 @@ export default function App() {
           <p className="error">Không mở được dữ liệu: {dbStatus.message}</p>
         )}
         {dbStatus.kind === "ready" && (
-          <>
+          <div key={tab} className="tab-page">
             {tab === "review" && <ReviewTab db={dbStatus.db} />}
             {tab === "add" && <AddWordsTab db={dbStatus.db} onOpenWord={openWord} />}
             {tab === "library" && (
               <LibraryTab db={dbStatus.db} selectedId={openWordId} onSelect={setOpenWordId} />
             )}
             {tab === "settings" && <SettingsTab db={dbStatus.db} />}
-          </>
+          </div>
         )}
       </main>
     </div>
