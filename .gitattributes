@@ -1,0 +1,3 @@
+# Migration SQL phải giữ LF: sqlx kiểm tra checksum từng byte, đổi sang CRLF là app báo
+# "migration was previously applied but has been modified".
+*.sql text eol=lf

@@ -1,5 +1,17 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "./nodeSqliteDb";
+
+describe("file migration", () => {
+  // sqlx kiểm tra checksum từng byte: đổi LF → CRLF làm app không mở được DB cũ.
+  it("chỉ dùng LF", () => {
+    const dir = join(import.meta.dirname, "../../src-tauri/migrations");
+    for (const file of readdirSync(dir)) {
+      expect(readFileSync(join(dir, file), "utf8").includes("\r"), file).toBe(false);
+    }
+  });
+});
 
 const NOW = "2026-10-26T00:00:00.000Z";
 
