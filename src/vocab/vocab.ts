@@ -60,7 +60,7 @@ export type AddResult =
   | { status: "invalid"; message: string };
 
 export interface BatchResult {
-  added: { lineNo: number; term: string }[];
+  added: { lineNo: number; term: string; wordId: number }[];
   duplicates: { lineNo: number; term: string; wordId: number }[];
   invalid: { lineNo: number; line: string; message: string }[];
 }
@@ -77,6 +77,7 @@ export type WordStatus = "pending" | "learning" | "mastered";
 export interface WordFilter {
   query?: string;
   status?: WordStatus;
+  topicId?: number;
 }
 
 const MASTERED_SQL = `(
@@ -117,7 +118,9 @@ export async function addWordsBatch(db: Db, text: string, now = new Date()): Pro
       continue;
     }
     const inserted = await insertWord(db, cleaned.word, now);
-    if (inserted.status === "added") result.added.push({ lineNo, term: cleaned.word.term });
+    if (inserted.status === "added") {
+      result.added.push({ lineNo, term: cleaned.word.term, wordId: inserted.wordId });
+    }
     if (inserted.status === "duplicate") {
       result.duplicates.push({ lineNo, term: cleaned.word.term, wordId: inserted.wordId });
     }
@@ -140,6 +143,10 @@ export async function listWords(db: Db, filter: WordFilter = {}): Promise<WordSu
   if (filter.status === "pending") where.push("enriched = 0");
   if (filter.status === "learning") where.push(`enriched = 1 AND NOT ${MASTERED_SQL}`);
   if (filter.status === "mastered") where.push(MASTERED_SQL);
+  if (filter.topicId !== undefined) {
+    where.push("EXISTS (SELECT 1 FROM word_topics wt WHERE wt.word_id = words.id AND wt.topic_id = ?)");
+    params.push(filter.topicId);
+  }
 
   const rows = await db.select<WordRow>(
     `SELECT id, term, reading, meanings_vi, enriched, ${MASTERED_SQL} AS mastered FROM words

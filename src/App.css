@@ -381,3 +381,76 @@ select {
 .grade-row button {
   min-width: 100px;
 }
+
+.library-tab {
+  height: 100%;
+}
+
+.library-tab > .library {
+  flex: 1;
+  min-height: 0;
+}
+
+.segmented {
+  display: inline-flex;
+  margin-left: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segmented button {
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+}
+
+.segmented button:last-child {
+  border-right: none;
+}
+
+.segmented button.active {
+  color: #fff;
+  background: var(--accent);
+}
+
+.topics-panel,
+.quiz {
+  max-width: 640px;
+}
+
+.quiz.review-card {
+  margin: 0 auto;
+  width: 100%;
+}
+
+.topic-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.quiz-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  width: 100%;
+}
+
+.quiz-option {
+  padding: 10px 14px;
+  text-align: left;
+}
+
+.quiz-option:disabled {
+  opacity: 1;
+}
+
+.quiz-option.correct {
+  background: #e6f6ea;
+  border-color: #1a7f37;
+}
+
+.quiz-option.wrong {
+  background: #fdecea;
+  border-color: #b42318;
+}

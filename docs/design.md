@@ -266,3 +266,12 @@ Nguyên tắc:
 - Mỗi lần chấm ghi 2 câu: cập nhật thẻ, rồi ghi review_logs.
 - **Kho từ:** lọc trạng thái Chờ bổ sung (`enriched = 0`) / Đang học (`enriched = 1`, chưa vững) / Đã nhớ vững (đủ 2 thẻ, cả 2 `stability >= 21`), nhãn "Vững" trong danh sách.
 - Hết phiên: thống kê + danh sách trả lời sai (dùng cho prompt giải thích ở giai đoạn 6).
+
+### Giai đoạn 5 (chủ đề + quiz)
+
+- Tab Kho từ chia 3 mục: **Danh sách** (tìm, lọc trạng thái, lọc chủ đề, gắn hàng loạt các từ đang lọc vào 1 chủ đề, sửa từ + gắn/gỡ chủ đề) · **Chủ đề** (tạo, đổi tên, xóa 2 bước, đếm từ) · **Quiz**.
+- Tên chủ đề: NFKC + bỏ khoảng trắng thừa, 1–50 ký tự, không trùng.
+- Nhập hàng loạt: chọn chủ đề cho cả lô, gắn cho cả từ mới lẫn từ trùng (từ đã có).
+- Migration `0003_quiz_results.sql`: bảng `quiz_sessions` (tên chủ đề dạng JSON, tổng, số đúng, thời gian) và `quiz_answers` (từ, đúng/sai, đáp án đã chọn), chỉ mục `word_topics(topic_id)`.
+- **Quiz:** từ thuộc ít nhất 1 chủ đề đã chọn và có nghĩa, xáo trộn, tối đa 20 câu. Hiện từ, chọn 1 trong 4 nghĩa (đáp án = tối đa 2 nghĩa đầu). Đáp án nhiễu: ưu tiên từ có chung chủ đề (trong các chủ đề đã chọn) với từ đang hỏi, thiếu thì lấy từ cả kho, không trùng chữ. Kho cần ít nhất 4 đáp án khác nhau. Phím 1–4 chọn, Enter sang câu.
+- Kết quả quiz chỉ lưu khi làm hết bài. Không đụng thẻ/lịch FSRS. "Xem lại" = 10 lần quiz gần nhất (điểm + từ làm sai) ở màn chọn chủ đề.

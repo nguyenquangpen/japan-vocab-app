@@ -3,7 +3,7 @@ import { createTestDb } from "./nodeSqliteDb";
 
 const NOW = "2026-10-26T00:00:00.000Z";
 
-describe("migration 0001", () => {
+describe("migrations", () => {
   it("tạo đủ các bảng", async () => {
     const db = createTestDb();
     const rows = await db.select<{ name: string }>(
@@ -12,6 +12,8 @@ describe("migration 0001", () => {
     expect(rows.map((r) => r.name)).toEqual([
       "cards",
       "examples",
+      "quiz_answers",
+      "quiz_sessions",
       "review_logs",
       "settings",
       "topics",

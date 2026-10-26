@@ -1,5 +1,6 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Db } from "../db/db";
+import { addWordsToTopic, listTopics, type Topic } from "../topics/topics";
 import { addWord, addWordsBatch, type BatchResult } from "../vocab/vocab";
 import EnrichPanel from "./EnrichPanel";
 
@@ -97,6 +98,27 @@ function BatchForm({ db, onAdded }: { db: Db; onAdded: () => void }) {
   const [result, setResult] = useState<BatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [topicIds, setTopicIds] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    listTopics(db)
+      .then((rows) => !cancelled && setTopics(rows))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
+
+  function toggleTopic(id: number) {
+    setTopicIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function submit() {
     if (saving || text.trim() === "") return;
@@ -104,6 +126,9 @@ function BatchForm({ db, onAdded }: { db: Db; onAdded: () => void }) {
     setError(null);
     try {
       const batch = await addWordsBatch(db, text);
+      // Chủ đề áp cho cả từ mới lẫn từ đã có trong lô.
+      const wordIds = [...batch.added, ...batch.duplicates].map((w) => w.wordId);
+      for (const topicId of topicIds) await addWordsToTopic(db, topicId, wordIds);
       setResult(batch);
       if (batch.added.length > 0) onAdded();
       // Giữ lại các dòng lỗi để sửa tiếp.
@@ -136,6 +161,19 @@ function BatchForm({ db, onAdded }: { db: Db; onAdded: () => void }) {
         onKeyDown={onKeyDown}
         placeholder={"食べる たべる\n飲む | のむ | uống\n水"}
       />
+      {topics.length > 0 && (
+        <div className="field">
+          <span>Gắn cả lô vào chủ đề (tùy chọn)</span>
+          <div className="chips">
+            {topics.map((t) => (
+              <label key={t.id} className={topicIds.has(t.id) ? "chip active" : "chip"}>
+                <input type="checkbox" checked={topicIds.has(t.id)} onChange={() => toggleTopic(t.id)} />
+                {t.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="row">
         <button className="primary" onClick={() => void submit()} disabled={saving}>
           Thêm tất cả (Ctrl+Enter)
