@@ -1,8 +1,166 @@
-export default function AddWordsTab() {
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import type { Db } from "../db/db";
+import { addWord, addWordsBatch, type BatchResult } from "../vocab/vocab";
+
+interface Props {
+  db: Db;
+  onOpenWord: (wordId: number) => void;
+}
+
+export default function AddWordsTab({ db, onOpenWord }: Props) {
   return (
-    <section>
+    <section className="stack">
       <h1>Thêm từ</h1>
-      <p className="muted">Sẽ làm ở giai đoạn 2.</p>
+      <SingleWordForm db={db} onOpenWord={onOpenWord} />
+      <BatchForm db={db} />
     </section>
+  );
+}
+
+function SingleWordForm({ db, onOpenWord }: Props) {
+  const [term, setTerm] = useState("");
+  const [reading, setReading] = useState("");
+  const [meanings, setMeanings] = useState("");
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const termRef = useRef<HTMLInputElement>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    try {
+      const result = await addWord(db, { term, reading, meanings });
+      if (result.status === "invalid") {
+        setMessage({ kind: "error", text: result.message });
+        return;
+      }
+      if (result.status === "duplicate") {
+        onOpenWord(result.wordId);
+        return;
+      }
+      setMessage({ kind: "ok", text: `Đã thêm ${term.trim()}` });
+      setTerm("");
+      setReading("");
+      setMeanings("");
+      termRef.current?.focus();
+    } catch (error) {
+      setMessage({ kind: "error", text: `Lỗi khi lưu: ${String(error)}` });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="card stack" onSubmit={submit}>
+      <h2>Từng từ</h2>
+      <div className="row">
+        <label className="field grow">
+          <span>Từ</span>
+          <input
+            ref={termRef}
+            className="jp"
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            autoFocus
+            placeholder="食べる"
+          />
+        </label>
+        <label className="field grow">
+          <span>Cách đọc (tùy chọn)</span>
+          <input className="jp" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="たべる" />
+        </label>
+        <label className="field grow">
+          <span>Nghĩa (tùy chọn, ngăn bởi dấu phẩy)</span>
+          <input value={meanings} onChange={(e) => setMeanings(e.target.value)} placeholder="ăn, dùng bữa" />
+        </label>
+      </div>
+      <div className="row">
+        <button type="submit" className="primary" disabled={saving}>
+          Lưu (Enter)
+        </button>
+        {message && <span className={message.kind === "ok" ? "success" : "error"}>{message.text}</span>}
+      </div>
+      <p className="muted small">Nếu từ đã có trong kho, app mở từ cũ ở tab Kho từ.</p>
+    </form>
+  );
+}
+
+function BatchForm({ db }: { db: Db }) {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<BatchResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (saving || text.trim() === "") return;
+    setSaving(true);
+    setError(null);
+    try {
+      const batch = await addWordsBatch(db, text);
+      setResult(batch);
+      // Giữ lại các dòng lỗi để sửa tiếp.
+      setText(batch.invalid.map((i) => i.line).join("\n"));
+    } catch (e) {
+      setError(`Lỗi khi lưu: ${String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      void submit();
+    }
+  }
+
+  return (
+    <div className="card stack">
+      <h2>Hàng loạt</h2>
+      <p className="muted small">
+        Mỗi dòng một từ: <code>từ</code>, <code>từ cách_đọc</code> hoặc <code>từ | cách đọc | nghĩa</code>.
+      </p>
+      <textarea
+        className="jp"
+        rows={8}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={"食べる たべる\n飲む | のむ | uống\n水"}
+      />
+      <div className="row">
+        <button className="primary" onClick={() => void submit()} disabled={saving}>
+          Thêm tất cả (Ctrl+Enter)
+        </button>
+        {error && <span className="error">{error}</span>}
+      </div>
+      {result && <BatchSummary result={result} />}
+    </div>
+  );
+}
+
+function BatchSummary({ result }: { result: BatchResult }) {
+  return (
+    <div className="stack small">
+      <p className="success">Đã thêm {result.added.length} từ.</p>
+      {result.duplicates.length > 0 && (
+        <p className="muted">
+          Bỏ qua {result.duplicates.length} từ đã có: <span className="jp">{result.duplicates.map((d) => d.term).join("、")}</span>
+        </p>
+      )}
+      {result.invalid.length > 0 && (
+        <div>
+          <p className="error">{result.invalid.length} dòng lỗi (đã để lại trong ô để sửa):</p>
+          <ul>
+            {result.invalid.map((i) => (
+              <li key={i.lineNo}>
+                Dòng {i.lineNo}: <span className="jp">{i.line}</span> — {i.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

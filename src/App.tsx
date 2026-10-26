@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Db } from "./db/db";
 import { openAppDb } from "./db/tauriDb";
 import AddWordsTab from "./tabs/AddWordsTab";
 import LibraryTab from "./tabs/LibraryTab";
@@ -7,28 +8,34 @@ import SettingsTab from "./tabs/SettingsTab";
 import "./App.css";
 
 const TABS = [
-  { id: "review", label: "Ôn tập", Component: ReviewTab },
-  { id: "add", label: "Thêm từ", Component: AddWordsTab },
-  { id: "library", label: "Kho từ", Component: LibraryTab },
-  { id: "settings", label: "Cài đặt", Component: SettingsTab },
+  { id: "review", label: "Ôn tập" },
+  { id: "add", label: "Thêm từ" },
+  { id: "library", label: "Kho từ" },
+  { id: "settings", label: "Cài đặt" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
-type DbStatus = { kind: "loading" } | { kind: "ready" } | { kind: "error"; message: string };
+type DbStatus = { kind: "loading" } | { kind: "ready"; db: Db } | { kind: "error"; message: string };
 
 export default function App() {
   const [tab, setTab] = useState<TabId>("review");
   const [dbStatus, setDbStatus] = useState<DbStatus>({ kind: "loading" });
+  const [openWordId, setOpenWordId] = useState<number | null>(null);
 
   useEffect(() => {
     openAppDb()
-      .then((db) => db.select("SELECT key FROM settings LIMIT 1"))
-      .then(() => setDbStatus({ kind: "ready" }))
+      .then(async (db) => {
+        await db.select("SELECT key FROM settings LIMIT 1");
+        setDbStatus({ kind: "ready", db });
+      })
       .catch((error: unknown) => setDbStatus({ kind: "error", message: String(error) }));
   }, []);
 
-  const Current = TABS.find((t) => t.id === tab)!.Component;
+  function openWord(wordId: number) {
+    setOpenWordId(wordId);
+    setTab("library");
+  }
 
   return (
     <div className="app">
@@ -48,7 +55,16 @@ export default function App() {
         {dbStatus.kind === "error" && (
           <p className="error">Không mở được dữ liệu: {dbStatus.message}</p>
         )}
-        {dbStatus.kind === "ready" && <Current />}
+        {dbStatus.kind === "ready" && (
+          <>
+            {tab === "review" && <ReviewTab />}
+            {tab === "add" && <AddWordsTab db={dbStatus.db} onOpenWord={openWord} />}
+            {tab === "library" && (
+              <LibraryTab db={dbStatus.db} selectedId={openWordId} onSelect={setOpenWordId} />
+            )}
+            {tab === "settings" && <SettingsTab />}
+          </>
+        )}
       </main>
     </div>
   );

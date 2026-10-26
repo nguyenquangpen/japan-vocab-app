@@ -231,3 +231,15 @@ Nguyên tắc:
 - ESLint 10 (không dùng `eslint-plugin-react` vì chưa hỗ trợ ESLint 10). Cấm `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `new Function` bằng luật có sẵn.
 - Setting `grade_buttons` (`2` hoặc `4`) lưu kiểu nút chấm ở màn ôn.
 - Mạng của WebView2: runtime WebView2 (Microsoft) tự giữ 1 kết nối HTTPS tới máy chủ Microsoft (đo bằng `Get-NetTCPConnection`, dải `40.104.x.x`). Kết nối này của runtime, không mang dữ liệu app, trang không dùng được vì CSP chỉ cho `connect-src ipc:`. Chấp nhận là ngoại lệ. Đã giảm mạng nền bằng `additionalBrowserArgs` (`--disable-background-networking --disable-component-update --disable-domain-reliability --no-pings --metrics-recording-only`, giữ nguyên các cờ mặc định của Tauri) và bật `freezePrototype`.
+- plugin-sql bind mọi số JS thành REAL (`5` → `5.0`). So sánh `id = ?` và cột INTEGER vẫn đúng vì SQLite tự đổi kiểu, nhưng không dùng `LIMIT ?`/`OFFSET ?` (viết số thẳng vào câu SQL sau khi ép `Math.trunc`).
+
+### Giai đoạn 2 (nhập từ + kho từ)
+
+- Thẻ ôn **chưa tạo khi thêm từ**. Giai đoạn 4 dùng 1 câu `INSERT OR IGNORE INTO cards ... SELECT` tạo thẻ còn thiếu cho mọi từ (chạy lại nhiều lần vẫn an toàn, dựa vào `UNIQUE (word_id, skill)`). Nhờ vậy thêm/sửa từ chỉ cần 1 câu lệnh, không cần transaction.
+- **Trùng từ:** cùng `term` sau NFKC + bỏ khoảng trắng thừa, và cách đọc giống nhau hoặc một bên chưa có cách đọc. 上手 じょうず và 上手 うわて là 2 từ khác nhau. Kiểm tra trùng nằm ngay trong câu `INSERT ... WHERE NOT EXISTS`.
+- **Nhập hàng loạt:** dạng `term`, `term reading` (cách nhau bằng khoảng trắng, kể cả khoảng trắng toàn góc), `term | reading | nghĩa` (reading được để trống). Từ trùng trong cùng lô cũng bị bỏ qua. Các dòng lỗi được để lại trong ô nhập để sửa tiếp. Chọn chủ đề cho lô làm ở giai đoạn 5.
+- **Nghĩa:** khi nhập, tách bằng `,` hoặc `;`. Ở màn sửa từ, mỗi dòng một nghĩa.
+- **Cách đọc** chỉ nhận hiragana/katakana/ー (chưa đổi romaji ở màn nhập).
+- **Giới hạn:** term 50, reading 50, tối đa 5 nghĩa × 100 ký tự, từ loại 50, cách dùng 500, ghi chú 1000.
+- **Kho từ:** tìm theo term/reading/nghĩa (LIKE, có escape `%` `_`), lọc "chỉ từ chờ bổ sung", từ mới nhất lên đầu. Lọc "đang học / vững" làm ở giai đoạn 4, lọc chủ đề ở giai đoạn 5. Ví dụ và từ dễ nhầm chỉ hiển thị, chưa sửa tay.
+- **Xóa từ:** bấm 2 lần ("Xóa từ" → "Bấm lần nữa để xóa"), không dùng hộp thoại.
