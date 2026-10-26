@@ -57,7 +57,7 @@ export default function App() {
         )}
         {dbStatus.kind === "ready" && (
           <>
-            {tab === "review" && <ReviewTab />}
+            {tab === "review" && <ReviewTab db={dbStatus.db} />}
             {tab === "add" && <AddWordsTab db={dbStatus.db} onOpenWord={openWord} />}
             {tab === "library" && (
               <LibraryTab db={dbStatus.db} selectedId={openWordId} onSelect={setOpenWordId} />

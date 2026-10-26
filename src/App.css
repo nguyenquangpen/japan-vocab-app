@@ -321,3 +321,63 @@ button.danger {
   width: 70px;
   text-align: center;
 }
+
+select {
+  padding: 6px 10px;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.badge.mastered {
+  color: #1a7f37;
+  background: #e6f6ea;
+}
+
+.review {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.review-card {
+  align-items: center;
+  padding: 32px 24px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.review-term {
+  font-size: 3rem;
+  line-height: 1.2;
+}
+
+.review-reading {
+  font-size: 1.4rem;
+  color: var(--muted);
+}
+
+.review-meanings {
+  font-size: 1.3rem;
+}
+
+.review-answer {
+  align-items: center;
+  gap: 8px;
+}
+
+.review-input {
+  max-width: 320px;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+.grade-row {
+  justify-content: center;
+}
+
+.grade-row button {
+  min-width: 100px;
+}

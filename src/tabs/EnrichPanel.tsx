@@ -41,7 +41,7 @@ export default function EnrichPanel({ db, version }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    listWords(db, { pendingOnly: true })
+    listWords(db, { status: "pending" })
       .then((rows) => {
         if (cancelled) return;
         setPending(rows);

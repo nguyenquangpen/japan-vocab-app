@@ -34,6 +34,7 @@ function word(over: Partial<WordDetail> = {}): WordDetail {
     reading: null,
     meanings: [],
     enriched: false,
+    mastered: false,
     partOfSpeech: null,
     usageNote: null,
     userNote: null,

@@ -1,4 +1,5 @@
 import type { Db } from "../db/db";
+import { MASTERED_STABILITY } from "../review/scheduler";
 import {
   cleanWord,
   normalizeText,
@@ -22,6 +23,8 @@ export interface WordSummary {
   reading: string | null;
   meanings: string[];
   enriched: boolean;
+  /** Cả 2 thẻ có stability >= MASTERED_STABILITY. */
+  mastered: boolean;
 }
 
 export interface WordDetail extends WordSummary {
@@ -68,10 +71,18 @@ export type UpdateResult =
   | { status: "invalid"; message: string }
   | { status: "not_found" };
 
+/** pending = chờ bổ sung, learning = đã bổ sung nhưng chưa vững, mastered = vững. */
+export type WordStatus = "pending" | "learning" | "mastered";
+
 export interface WordFilter {
   query?: string;
-  pendingOnly?: boolean;
+  status?: WordStatus;
 }
+
+const MASTERED_SQL = `(
+  (SELECT COUNT(*) FROM cards c WHERE c.word_id = words.id) = 2
+  AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.word_id = words.id AND c.stability < ${MASTERED_STABILITY})
+)`;
 
 // Điều kiện trùng, tham số: term, reading, reading.
 const SAME_WORD = "term = ? AND (reading IS NULL OR ? IS NULL OR reading = ?)";
@@ -126,10 +137,12 @@ export async function listWords(db: Db, filter: WordFilter = {}): Promise<WordSu
     );
     params.push(pattern, pattern, pattern);
   }
-  if (filter.pendingOnly) where.push("enriched = 0");
+  if (filter.status === "pending") where.push("enriched = 0");
+  if (filter.status === "learning") where.push(`enriched = 1 AND NOT ${MASTERED_SQL}`);
+  if (filter.status === "mastered") where.push(MASTERED_SQL);
 
   const rows = await db.select<WordRow>(
-    `SELECT id, term, reading, meanings_vi, enriched FROM words
+    `SELECT id, term, reading, meanings_vi, enriched, ${MASTERED_SQL} AS mastered FROM words
      ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
      ORDER BY created_at DESC, id DESC`,
     params,
@@ -138,7 +151,7 @@ export async function listWords(db: Db, filter: WordFilter = {}): Promise<WordSu
 }
 
 export async function getWord(db: Db, id: number): Promise<WordDetail | null> {
-  const [row] = await db.select<WordRow>("SELECT * FROM words WHERE id = ?", [id]);
+  const [row] = await db.select<WordRow>(`SELECT *, ${MASTERED_SQL} AS mastered FROM words WHERE id = ?`, [id]);
   if (!row) return null;
   const examples = await db.select<ExampleRow>(
     "SELECT id, ja, reading, vi FROM examples WHERE word_id = ? ORDER BY id",
@@ -290,6 +303,7 @@ interface WordRow {
   reading: string | null;
   meanings_vi: string | null;
   enriched: number;
+  mastered: number;
   part_of_speech?: string | null;
   usage_note?: string | null;
   user_note?: string | null;
@@ -312,6 +326,7 @@ function toSummary(row: WordRow): WordSummary {
     reading: row.reading,
     meanings: parseJsonArray(row.meanings_vi).filter((m): m is string => typeof m === "string"),
     enriched: row.enriched === 1,
+    mastered: row.mastered === 1,
   };
 }
 

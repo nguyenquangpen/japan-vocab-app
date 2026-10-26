@@ -6,6 +6,7 @@ import {
   listWords,
   updateWord,
   type WordDetail,
+  type WordStatus,
   type WordSummary,
 } from "../vocab/vocab";
 
@@ -17,14 +18,14 @@ interface Props {
 
 export default function LibraryTab({ db, selectedId, onSelect }: Props) {
   const [query, setQuery] = useState("");
-  const [pendingOnly, setPendingOnly] = useState(false);
+  const [status, setStatus] = useState<WordStatus | "all">("all");
   const [words, setWords] = useState<WordSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    listWords(db, { query, pendingOnly })
+    listWords(db, { query, status: status === "all" ? undefined : status })
       .then((rows) => {
         if (cancelled) return;
         setWords(rows);
@@ -34,7 +35,7 @@ export default function LibraryTab({ db, selectedId, onSelect }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [db, query, pendingOnly, version]);
+  }, [db, query, status, version]);
 
   const reload = () => setVersion((v) => v + 1);
 
@@ -48,10 +49,12 @@ export default function LibraryTab({ db, selectedId, onSelect }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Tìm theo từ, cách đọc, nghĩa"
         />
-        <label className="row small">
-          <input type="checkbox" checked={pendingOnly} onChange={(e) => setPendingOnly(e.target.checked)} />
-          Chỉ từ chờ bổ sung
-        </label>
+        <select value={status} onChange={(e) => setStatus(e.target.value as WordStatus | "all")}>
+          <option value="all">Tất cả trạng thái</option>
+          <option value="pending">Chờ bổ sung</option>
+          <option value="learning">Đang học</option>
+          <option value="mastered">Đã nhớ vững</option>
+        </select>
         <p className="muted small">{words.length} từ</p>
         {error && <p className="error">{error}</p>}
         <ul className="word-list">
@@ -65,6 +68,7 @@ export default function LibraryTab({ db, selectedId, onSelect }: Props) {
                 {w.reading && <span className="jp muted">{w.reading}</span>}
                 <span className="word-meaning">{w.meanings[0] ?? ""}</span>
                 {!w.enriched && <span className="badge">Chờ bổ sung</span>}
+                {w.mastered && <span className="badge mastered">Vững</span>}
               </button>
             </li>
           ))}

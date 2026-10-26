@@ -253,3 +253,16 @@ Nguyên tắc:
 - Xem trước chỉ hiện trường AI có gợi ý khác hiện tại. Trường hiện tại trống thì mặc định dùng AI, trường đã có thì mặc định giữ (tick để ghi đè). Ghi chú của tôi không bao giờ bị AI ghi đè.
 - Lưu (`saveEnrichment`): kiểm tra trùng cách đọc → thay ví dụ (xóa rồi chèn 1 câu) → cập nhật từ + `enriched = 1` sau cùng. Lỗi giữa chừng thì từ vẫn ở "Chờ bổ sung", lưu lại không nhân đôi ví dụ.
 - Module `settings` (`loadSettings`) đọc bảng settings, giá trị hỏng thì dùng mặc định. Màn Cài đặt vẫn để giai đoạn 6.
+
+### Giai đoạn 4 (ôn tập FSRS)
+
+- Migration `0002_card_learning_steps.sql`: thêm cột `cards.learning_steps` (ts-fsrs 5 cần để biết thẻ đang ở bước học nào; thiếu cột này thẻ luôn quay về bước đầu), thêm chỉ mục `cards(state, due)` và `review_logs(card_id, reviewed_at)`.
+- FSRS: `request_retention = 0.9`, bật fuzz, bước học mặc định của ts-fsrs (học: 1 phút, 10 phút; học lại: 10 phút).
+- **Thẻ chỉ có khi từ đủ cách đọc và nghĩa.** `ensureCards` chạy đầu mỗi phiên, tạo thẻ còn thiếu bằng 1 câu `INSERT OR IGNORE`. Từ chưa đủ không vào ôn, màn ôn báo số từ này.
+- **Phiên ôn:** thẻ đến hạn (sắp theo `due`, tối đa `max_reviews_per_session`), sau đó thẻ của từ mới (từ cũ nhất trước). "Từ mới hôm nay" = số từ có thẻ được ôn lần đầu từ 0 giờ hôm nay (giờ máy). Thẻ mới: reading trước meaning (mặt sau thẻ meaning lộ cách đọc), từ toàn kana thì meaning trước.
+- **Trong phiên:** chấm xong, thẻ nào đến hạn trong 20 phút thì xếp lại cuối hàng đợi (thẻ mới cần đúng 2 lần trong phiên). Hết hàng đợi là hết phiên.
+- **Chấm reading:** gõ romaji tự đổi sang kana (wanakana IME mode, `n` cuối đổi khi chấm). So sánh sau NFKC, bỏ khoảng trắng, katakana → hiragana; giữ ー. Đúng → Good, sai → Again. Thẻ reading của từ toàn kana hiện nghĩa, bắt gõ lại từ.
+- **Chấm meaning:** Space/Enter lật, phím số chấm (2 nút: Quên=Again, Nhớ=Good; 4 nút: Again/Hard/Good/Easy theo setting `grade_buttons`). `correct` trong review_logs = khác Again.
+- Mỗi lần chấm ghi 2 câu: cập nhật thẻ, rồi ghi review_logs.
+- **Kho từ:** lọc trạng thái Chờ bổ sung (`enriched = 0`) / Đang học (`enriched = 1`, chưa vững) / Đã nhớ vững (đủ 2 thẻ, cả 2 `stability >= 21`), nhãn "Vững" trong danh sách.
+- Hết phiên: thống kê + danh sách trả lời sai (dùng cho prompt giải thích ở giai đoạn 6).

@@ -84,7 +84,7 @@ describe("listWords", () => {
     expect(await terms({ query: "食" })).toEqual(["食べる"]);
     expect(await terms({ query: "のむ" })).toEqual(["飲む"]);
     expect(await terms({ query: "uống" })).toEqual(["飲む"]);
-    expect(await terms({ pendingOnly: true })).toEqual(["食べる"]);
+    expect(await terms({ status: "pending" })).toEqual(["食べる"]);
     expect(await terms({ query: "%" })).toEqual([]);
   });
 
