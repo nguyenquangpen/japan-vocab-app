@@ -46,4 +46,10 @@ Không thêm tính năng ngoài design.md nếu tôi chưa đồng ý. Nếu th�
 
 ## Lệnh
 
-(Điền sau khi dựng khung: chạy dev, build, test, lint.)
+- Chạy app khi phát triển: `npm run tauri dev`
+- Build bản cài: `npm run tauri build` (chỉ build exe, không đóng gói: `npx tauri build --no-bundle`)
+- Test: `npm test` (Vitest, DB thật trong bộ nhớ qua `node:sqlite`)
+- Kiểm tra kiểu: `npm run typecheck`
+- Lint: `npm run lint`
+
+Rust nằm ở `%USERPROFILE%\.cargo\bin`. Nếu terminal báo không có `cargo`, mở lại terminal/VS Code để nhận PATH mới.

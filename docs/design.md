@@ -82,13 +82,14 @@ CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
--- settings mặc định: new_per_day=10, max_reviews_per_session=100, level=N5
+-- settings mặc định: new_per_day=10, max_reviews_per_session=100, level=N5, grade_buttons=2
 ```
 
 Ghi chú:
 - Khi tạo từ mới, tự tạo 2 thẻ (`meaning`, `reading`) bằng `createEmptyCard()`.
 - Từ chỉ viết kana (ありがとう) vẫn có thẻ `reading`, nhưng màn ôn kỹ năng này hiển thị nghĩa và yêu cầu gõ từ (vì không có kanji để đọc). Nếu thấy rối thì bỏ thẻ `reading` cho từ toàn kana.
-- Migration: dùng cơ chế migration của plugin sql, đánh số phiên bản.
+- Migration: dùng cơ chế migration của plugin sql, đánh số phiên bản. File SQL nằm ở `src-tauri/migrations/NNNN_ten.sql`, khai báo trong `src-tauri/src/lib.rs`. Test chạy lại đúng các file này.
+- Tham số SQL dùng `?` (không dùng `$1`), vì adapter `node:sqlite` dùng cho test không bind được `$1` theo vị trí.
 
 ## 3. Nhập từ
 
@@ -201,3 +202,32 @@ Font hiển thị tiếng Nhật rõ ràng (ví dụ Noto Sans JP hoặc font h�
 ## 10. Chưa làm (để sau)
 
 Backup, đồng bộ, mobile, kỹ năng viết, câu điền từ vào ngữ cảnh, quiz do AI sinh, gọi API AI tự động, furigana, pitch accent, thống kê nâng cao.
+
+## 11. Cấu trúc module
+
+Mỗi khối nghiệp vụ là một module có interface nhỏ, phần phức tạp giấu bên trong. Giao diện React chỉ gọi interface, không tự viết SQL hay gọi thẳng `ts-fsrs`/`zod`/`wanakana`.
+
+| Module | Interface (dự kiến) | Giấu bên trong | Giai đoạn |
+|---|---|---|---|
+| `src/db` | `Db { execute, select }` | plugin-sql hoặc node:sqlite | 1 |
+| `vocab` | `addWord`, `addWordsBatch`, `listWords`, `getWord`, `updateWord`, `deleteWord` | chuẩn hóa NFKC, chống trùng, tách dòng hàng loạt, tạo 2 thẻ, mã hóa cột JSON, tính trạng thái | 2 |
+| `enrichment` | `buildEnrichPrompt`, `parseEnrichResponse` (hàm thuần) | bỏ code fence, `zod`, ghép theo term, lỗi tiếng Việt | 3 |
+| `review` | `buildQueue`, `grade`, `checkReading` (hàm thuần) + `submitReview(db, …)` mỏng | `ts-fsrs`, `wanakana`, chuẩn hóa kana | 4 |
+
+Nguyên tắc:
+- Module nhận `db: Db` qua tham số, không tự mở kết nối.
+- `Db` có 2 adapter: `tauriDb.ts` (app) và `nodeSqliteDb.ts` (test, dùng `node:sqlite` có sẵn trong Node, chạy toàn bộ migration trên DB trong bộ nhớ). Code giao diện bị ESLint cấm import `node:*` và `nodeSqliteDb`.
+- Logic khó viết thành hàm trả kết quả, phần ghi DB tách riêng và mỏng.
+- Không thêm seam nào khác khi chưa có thứ thực sự thay đổi qua nó.
+- Interface `Db` không hứa transaction: plugin-sql 2.6 mở DB bằng `Pool::connect` mặc định của sqlx (tối đa 10 kết nối, đã đọc mã nguồn), nên `BEGIN`/`COMMIT` qua 2 lời gọi `execute` không chắc cùng kết nối. Khóa ngoại thì sqlx bật sẵn. Việc cần ghi nhiều dòng nguyên tử (thêm từ + 2 thẻ) sẽ xử lý ở giai đoạn 2 (gộp thành 1 câu SQL, hoặc thêm 1 lệnh Rust nhỏ).
+
+## 12. Quyết định khi làm
+
+- Chuyển tab bằng state của React, không dùng thư viện router.
+- Font hệ thống (`Yu Gothic UI`, `Meiryo`), không tải font qua mạng.
+- CSP bản build: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`. `devCsp` nới thêm inline script và websocket HMR cho Vite, chỉ dùng khi `tauri dev`.
+- Dev server của Vite chỉ nghe `localhost:1420`, chỉ chạy khi phát triển. Bản build không mở cổng.
+- Capabilities: `core:default`, `sql:default`, `sql:allow-execute`, `clipboard-manager:allow-write-text`. Đã gỡ plugin `opener` có sẵn trong template.
+- ESLint 10 (không dùng `eslint-plugin-react` vì chưa hỗ trợ ESLint 10). Cấm `dangerouslySetInnerHTML`, `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `eval`, `new Function` bằng luật có sẵn.
+- Setting `grade_buttons` (`2` hoặc `4`) lưu kiểu nút chấm ở màn ôn.
+- Mạng của WebView2: runtime WebView2 (Microsoft) tự giữ 1 kết nối HTTPS tới máy chủ Microsoft (đo bằng `Get-NetTCPConnection`, dải `40.104.x.x`). Kết nối này của runtime, không mang dữ liệu app, trang không dùng được vì CSP chỉ cho `connect-src ipc:`. Chấp nhận là ngoại lệ. Đã giảm mạng nền bằng `additionalBrowserArgs` (`--disable-background-networking --disable-component-update --disable-domain-reliability --no-pings --metrics-recording-only`, giữ nguyên các cờ mặc định của Tauri) và bật `freezePrototype`.
