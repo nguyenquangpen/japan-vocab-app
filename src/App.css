@@ -454,3 +454,11 @@ select {
   background: #fdecea;
   border-color: #b42318;
 }
+
+.settings {
+  max-width: 520px;
+}
+
+input[type="radio"] {
+  margin: 0;
+}

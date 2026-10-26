@@ -1,6 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../db/nodeSqliteDb";
-import { DEFAULT_SETTINGS, loadSettings } from "./settings";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "./settings";
+
+describe("saveSettings", () => {
+  it("lưu rồi đọc lại được, kể cả khi key đã bị xóa", async () => {
+    const db = createTestDb();
+    await db.execute("DELETE FROM settings WHERE key = ?", ["grade_buttons"]);
+    const next = { level: "N3", newPerDay: 0, maxReviewsPerSession: 50, gradeButtons: 4 as const };
+    expect(await saveSettings(db, next)).toEqual({ ok: true });
+    expect(await loadSettings(db)).toEqual(next);
+  });
+
+  it("từ chối giá trị không hợp lệ và không ghi gì", async () => {
+    const db = createTestDb();
+    const bad = [
+      { ...DEFAULT_SETTINGS, level: "N6" },
+      { ...DEFAULT_SETTINGS, newPerDay: -1 },
+      { ...DEFAULT_SETTINGS, newPerDay: 1.5 },
+      { ...DEFAULT_SETTINGS, maxReviewsPerSession: 0 },
+      { ...DEFAULT_SETTINGS, maxReviewsPerSession: 1001 },
+      { ...DEFAULT_SETTINGS, gradeButtons: 3 as unknown as 2 },
+    ];
+    for (const settings of bad) expect(await saveSettings(db, settings)).toMatchObject({ ok: false });
+    expect(await loadSettings(db)).toEqual(DEFAULT_SETTINGS);
+  });
+});
 
 describe("loadSettings", () => {
   it("đọc giá trị mặc định từ migration", async () => {

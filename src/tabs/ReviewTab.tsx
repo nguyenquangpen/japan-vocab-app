@@ -1,19 +1,13 @@
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { Db } from "../db/db";
 import { advanceQueue, getReviewOverview, loadSession, submitReview, type ReviewItem, type ReviewOverview } from "../review/review";
+import { buildMistakesPrompt, type Mistake } from "../review/mistakesPrompt";
 import { Rating, isReadingCorrect, romajiToKanaWhileTyping, type Grade } from "../review/scheduler";
 import { loadSettings, type Settings } from "../settings/settings";
 
 interface Props {
   db: Db;
-}
-
-interface Mistake {
-  term: string;
-  reading: string;
-  meanings: string[];
-  skill: ReviewItem["skill"];
-  answer: string | null;
 }
 
 interface Stats {
@@ -82,6 +76,7 @@ export default function ReviewTab({ db }: Props) {
       <SessionEnd
         db={db}
         stats={stats}
+        level={load.settings.level}
         onReload={() => {
           setLoad({ kind: "loading" });
           setSessionKey((k) => k + 1);
@@ -277,8 +272,18 @@ function Answer({ item }: { item: ReviewItem }) {
   );
 }
 
-function SessionEnd({ db, stats, onReload }: { db: Db; stats: Stats; onReload: () => void }) {
+function SessionEnd({ db, stats, level, onReload }: { db: Db; stats: Stats; level: string; onReload: () => void }) {
   const [overview, setOverview] = useState<ReviewOverview | null>(null);
+  const [copyMessage, setCopyMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  async function copyMistakesPrompt() {
+    try {
+      await writeText(buildMistakesPrompt(stats.mistakes, level));
+      setCopyMessage({ kind: "ok", text: "Đã copy. Dán vào ChatGPT để đọc giải thích." });
+    } catch (e) {
+      setCopyMessage({ kind: "error", text: `Không copy được: ${String(e)}` });
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -316,6 +321,12 @@ function SessionEnd({ db, stats, onReload }: { db: Db; stats: Stats; onReload: (
               </li>
             ))}
           </ul>
+          <div className="row">
+            <button className="primary" onClick={() => void copyMistakesPrompt()}>
+              Copy prompt giải thích lỗi sai
+            </button>
+            {copyMessage && <span className={copyMessage.kind === "ok" ? "success" : "error"}>{copyMessage.text}</span>}
+          </div>
         </div>
       )}
       {overview?.nextDue && <p className="muted small">Thẻ đến hạn gần nhất: {new Date(overview.nextDue).toLocaleString("vi-VN")}</p>}

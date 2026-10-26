@@ -275,3 +275,8 @@ Nguyên tắc:
 - Migration `0003_quiz_results.sql`: bảng `quiz_sessions` (tên chủ đề dạng JSON, tổng, số đúng, thời gian) và `quiz_answers` (từ, đúng/sai, đáp án đã chọn), chỉ mục `word_topics(topic_id)`.
 - **Quiz:** từ thuộc ít nhất 1 chủ đề đã chọn và có nghĩa, xáo trộn, tối đa 20 câu. Hiện từ, chọn 1 trong 4 nghĩa (đáp án = tối đa 2 nghĩa đầu). Đáp án nhiễu: ưu tiên từ có chung chủ đề (trong các chủ đề đã chọn) với từ đang hỏi, thiếu thì lấy từ cả kho, không trùng chữ. Kho cần ít nhất 4 đáp án khác nhau. Phím 1–4 chọn, Enter sang câu.
 - Kết quả quiz chỉ lưu khi làm hết bài. Không đụng thẻ/lịch FSRS. "Xem lại" = 10 lần quiz gần nhất (điểm + từ làm sai) ở màn chọn chủ đề.
+
+### Giai đoạn 6 (prompt lỗi sai + cài đặt)
+
+- Nút "Copy prompt giải thích lỗi sai" ở màn hết phiên (khi có câu sai). Prompt gồm level, mỗi từ sai 1 dòng: term, cách đọc đúng, nghĩa đúng, kỹ năng (cách đọc: kèm câu đã gõ; nghĩa: "tự chấm là quên"). Bỏ dòng lặp (cùng từ, kỹ năng, câu gõ). Yêu cầu giải thích, mẹo nhớ, chỉ ra từ đang nhầm, 1 câu ví dụ, gom các từ dễ nhầm. Không dán kết quả lại vào app.
+- Màn Cài đặt: trình độ N5–N1, từ mới mỗi ngày 0–100, thẻ ôn tối đa mỗi phiên 1–1000, nút chấm 2 hoặc 4. `saveSettings` kiểm tra rồi ghi cả 4 key bằng 1 câu `INSERT ... ON CONFLICT DO UPDATE`. Áp dụng từ phiên ôn tiếp theo.

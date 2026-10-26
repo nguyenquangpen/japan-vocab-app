@@ -62,7 +62,7 @@ export default function App() {
             {tab === "library" && (
               <LibraryTab db={dbStatus.db} selectedId={openWordId} onSelect={setOpenWordId} />
             )}
-            {tab === "settings" && <SettingsTab />}
+            {tab === "settings" && <SettingsTab db={dbStatus.db} />}
           </>
         )}
       </main>
