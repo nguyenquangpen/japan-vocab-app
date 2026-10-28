@@ -241,6 +241,20 @@ button.danger:not(:disabled):hover {
   font-size: 1.8rem;
 }
 
+/* Chữ Hán to ở trên, kana nhỏ bên dưới như flashcard thông thường. */
+.term-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.term-kana {
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
 .review-term {
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -490,6 +504,229 @@ button.danger:not(:disabled):hover {
   background: var(--bad-soft);
   border-color: var(--bad);
   animation: shake 0.4s;
+}
+
+/* Kho từ: bộ lọc, ô tick, thanh thao tác hàng loạt */
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.filter-grid select {
+  min-width: 0;
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+.word-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #eef0f3;
+  transition: background-color 0.15s;
+}
+
+.word-row.checked {
+  background: #f7f8fe;
+}
+
+.word-row .word-item {
+  border-bottom: none;
+}
+
+.word-check {
+  flex-shrink: 0;
+  margin: 0 0 0 12px;
+  cursor: pointer;
+}
+
+.bulk-bar {
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border: 1px solid #d5d9f6;
+  border-radius: 10px;
+}
+
+/* Nghĩa mở rộng trên flashcard */
+.meaning-detail {
+  max-width: 480px;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  text-align: left;
+  background: #fafbff;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+
+/* Thống kê */
+.stats {
+  max-width: 900px;
+}
+
+.push-right {
+  margin-left: auto;
+}
+
+.stats-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.status-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.status-seg {
+  min-width: 4px;
+  transition: flex-grow 0.4s var(--ease);
+}
+
+.status-seg.mastered,
+.legend-dot.mastered {
+  background: var(--good);
+}
+
+.status-seg.learning,
+.legend-dot.learning {
+  background: var(--accent);
+}
+
+.status-seg.pending,
+.legend-dot.pending {
+  background: #b8bdc9;
+}
+
+.legend {
+  gap: 16px;
+  color: var(--muted);
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.day-chart {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  align-items: end;
+}
+
+.day-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.day-value {
+  min-height: 1.2em;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.day-track {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  max-width: 36px;
+  height: 140px;
+  border-bottom: 1px solid var(--border);
+}
+
+.day-bar {
+  width: 100%;
+  min-height: 0;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.5s var(--ease);
+}
+
+.day-col:hover .day-bar {
+  background: #3b47b8;
+}
+
+.day-label {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.day-rate {
+  font-size: 0.7rem;
+}
+
+.topic-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.topic-bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 140px) 1fr 32px;
+  align-items: center;
+  gap: 8px;
+}
+
+.topic-bar-row > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topic-track {
+  height: 8px;
+  background: #eef0f6;
+  border-radius: 999px;
+}
+
+.topic-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.5s var(--ease);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.bad-text {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 6px 4px;
+  text-align: left;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.stats-table th {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.stats-table th:not(:first-child) {
+  text-align: right;
 }
 
 /* Tôn trọng cài đặt giảm chuyển động của Windows. */

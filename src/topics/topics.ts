@@ -79,6 +79,17 @@ export async function removeWordFromTopic(db: Db, wordId: number, topicId: numbe
   await db.execute("DELETE FROM word_topics WHERE word_id = ? AND topic_id = ?", [wordId, topicId]);
 }
 
+/** Gỡ nhiều từ khỏi 1 chủ đề (1 câu lệnh). Trả về số liên kết đã gỡ. */
+export async function removeWordsFromTopic(db: Db, topicId: number, wordIds: number[]): Promise<number> {
+  const ids = [...new Set(wordIds)];
+  if (ids.length === 0) return 0;
+  const { rowsAffected } = await db.execute(
+    `DELETE FROM word_topics WHERE topic_id = ? AND word_id IN (${ids.map(() => "?").join(", ")})`,
+    [topicId, ...ids],
+  );
+  return rowsAffected;
+}
+
 function checkName(rawName: string): string | { status: "invalid"; message: string } {
   const name = normalizeText(rawName);
   if (name === "") return { status: "invalid", message: "Chưa nhập tên chủ đề." };

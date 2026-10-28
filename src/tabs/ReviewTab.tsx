@@ -163,13 +163,12 @@ function MeaningCard({ db, item, gradeButtons, onRecord, onGraded }: CardProps &
         >
           <div className="flip-face flip-front review-card stack">
             <span className="card-label">Nghĩa của từ này?</span>
-            <div className="jp review-term">{item.term}</div>
-            {item.readingLearned && <div className="jp review-reading">{item.reading}</div>}
+            <TermWithKana item={item} />
             <span className="flip-hint">Bấm vào thẻ hoặc Space để lật</span>
           </div>
           <div className="flip-face flip-back review-card stack" aria-hidden={!flipped}>
-            <div className="jp review-term small-term">{item.term}</div>
-            <Answer item={item} />
+            <TermWithKana item={item} small />
+            <Answer item={item} showReading={false} />
           </div>
         </div>
       </div>
@@ -288,11 +287,22 @@ function SessionProgress({ done, remaining }: { done: number; remaining: number 
   );
 }
 
-function Answer({ item }: { item: ReviewItem }) {
+/** Chữ Hán to ở trên, kana nhỏ bên dưới (từ toàn kana thì không lặp lại). */
+function TermWithKana({ item, small = false }: { item: ReviewItem; small?: boolean }) {
+  return (
+    <div className="term-block">
+      <div className={`jp review-term${small ? " small-term" : ""}`}>{item.term}</div>
+      {!item.kanaOnly && <div className="jp term-kana">{item.reading}</div>}
+    </div>
+  );
+}
+
+function Answer({ item, showReading = true }: { item: ReviewItem; showReading?: boolean }) {
   return (
     <div className="review-answer stack">
-      {!item.kanaOnly && <div className="jp review-reading">{item.reading}</div>}
+      {showReading && !item.kanaOnly && <div className="jp review-reading">{item.reading}</div>}
       <div className="review-meanings">{item.meanings.join("; ")}</div>
+      {item.meaningDetail && <div className="meaning-detail pre-line">{item.meaningDetail}</div>}
       {item.example && (
         <div className="small">
           <div className="jp">{item.example.ja}</div>

@@ -5,6 +5,7 @@ import AddWordsTab from "./tabs/AddWordsTab";
 import LibraryTab from "./tabs/LibraryTab";
 import ReviewTab from "./tabs/ReviewTab";
 import SettingsTab from "./tabs/SettingsTab";
+import StatsTab from "./tabs/StatsTab";
 import "./App.css";
 import "./theme.css";
 
@@ -12,6 +13,7 @@ const TABS = [
   { id: "review", label: "Ôn tập" },
   { id: "add", label: "Thêm từ" },
   { id: "library", label: "Kho từ" },
+  { id: "stats", label: "Thống kê" },
   { id: "settings", label: "Cài đặt" },
 ] as const;
 
@@ -67,6 +69,7 @@ export default function App() {
             {tab === "library" && (
               <LibraryTab db={dbStatus.db} selectedId={openWordId} onSelect={setOpenWordId} />
             )}
+            {tab === "stats" && <StatsTab db={dbStatus.db} />}
             {tab === "settings" && <SettingsTab db={dbStatus.db} />}
           </div>
         )}

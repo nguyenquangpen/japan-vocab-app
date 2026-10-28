@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Rating, State, gradeCard, isReadingCorrect, newCardState, normalizeKana, romajiToKanaWhileTyping } from "./scheduler";
+import { Rating, State, gradeCard, isReadingCorrect, newCardState, normalizeKana, romajiToKana, romajiToKanaWhileTyping } from "./scheduler";
 
 const NOW = new Date("2026-10-26T03:00:00.000Z");
 const minutes = (card: { due: string }, from: Date) => (new Date(card.due).getTime() - from.getTime()) / 60_000;
@@ -54,6 +54,12 @@ describe("cách đọc", () => {
     expect(isReadingCorrect("こーひー", "コーヒー")).toBe(true);
     expect(isReadingCorrect("たべた", "たべる")).toBe(false);
     expect(isReadingCorrect("  ", "たべる")).toBe(false);
+  });
+
+  it("romajiToKana đổi cả n cuối, giữ nguyên kana", () => {
+    expect(romajiToKana("hon")).toBe("ほん");
+    expect(romajiToKana("たべる")).toBe("たべる");
+    expect(romajiToKana("")).toBe("");
   });
 
   it("đổi romaji khi đang gõ, giữ n cuối", () => {

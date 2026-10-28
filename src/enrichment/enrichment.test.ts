@@ -38,6 +38,7 @@ function word(over: Partial<WordDetail> = {}): WordDetail {
     partOfSpeech: null,
     usageNote: null,
     userNote: null,
+    meaningDetail: null,
     confusables: [],
     examples: [],
     createdAt: "",

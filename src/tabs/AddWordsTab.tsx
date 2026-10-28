@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { Db } from "../db/db";
+import { romajiToKana, romajiToKanaWhileTyping } from "../review/scheduler";
 import { addWordsToTopic, listTopics, type Topic } from "../topics/topics";
 import { addWord, addWordsBatch, type BatchResult } from "../vocab/vocab";
 import EnrichPanel from "./EnrichPanel";
@@ -36,7 +37,7 @@ function SingleWordForm({ db, onOpenWord, onAdded }: Props & { onAdded: () => vo
     if (saving) return;
     setSaving(true);
     try {
-      const result = await addWord(db, { term, reading, meanings });
+      const result = await addWord(db, { term, reading: romajiToKana(reading), meanings });
       if (result.status === "invalid") {
         setMessage({ kind: "error", text: result.message });
         return;
@@ -63,7 +64,7 @@ function SingleWordForm({ db, onOpenWord, onAdded }: Props & { onAdded: () => vo
       <h2>Từng từ</h2>
       <div className="row">
         <label className="field grow">
-          <span>Từ</span>
+          <span>Chữ Hán (漢字)</span>
           <input
             ref={termRef}
             className="jp"
@@ -74,8 +75,13 @@ function SingleWordForm({ db, onOpenWord, onAdded }: Props & { onAdded: () => vo
           />
         </label>
         <label className="field grow">
-          <span>Cách đọc (tùy chọn)</span>
-          <input className="jp" value={reading} onChange={(e) => setReading(e.target.value)} placeholder="たべる" />
+          <span>Kana (かな, gõ romaji được)</span>
+          <input
+            className="jp"
+            value={reading}
+            onChange={(e) => setReading(romajiToKanaWhileTyping(e.target.value))}
+            placeholder="たべる"
+          />
         </label>
         <label className="field grow">
           <span>Nghĩa (tùy chọn, ngăn bởi dấu phẩy)</span>

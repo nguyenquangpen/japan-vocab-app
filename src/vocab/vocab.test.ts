@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "../db/nodeSqliteDb";
-import { addWord, addWordsBatch, deleteWord, getWord, listWords, updateWord } from "./vocab";
+import { addWord, addWordsBatch, deleteWord, getWord, listWords, updateWord, type WordSort } from "./vocab";
 
 const NOW = new Date("2026-10-26T01:02:03.000Z");
 
@@ -94,6 +94,49 @@ describe("listWords", () => {
     await addWord(db, { term: "二" }, new Date("2026-01-02T00:00:00Z"));
     expect((await listWords(db)).map((w) => w.term)).toEqual(["二", "一"]);
   });
+
+  it("sắp xếp cũ nhất, theo kana, sai nhiều nhất, sắp đến hạn", async () => {
+    const db = createTestDb();
+    const ids: number[] = [];
+    const words: [string, string | undefined][] = [["見る", "みる"], ["会う", "あう"], ["花", undefined]];
+    for (const [i, [term, reading]] of words.entries()) {
+      const r = await addWord(db, { term, reading }, new Date(Date.UTC(2026, 0, i + 1)));
+      if (r.status !== "added") throw new Error();
+      ids.push(r.wordId);
+    }
+    const terms = async (sort: WordSort) => (await listWords(db, { sort })).map((w) => w.term);
+
+    expect(await terms("oldest")).toEqual(["見る", "会う", "花"]);
+    // 花 chưa có kana nên xếp theo chính chữ Hán (sau kana).
+    expect(await terms("kana")).toEqual(["会う", "見る", "花"]);
+
+    const card = (wordId: number, due: string) =>
+      db.execute(
+        `INSERT INTO cards (word_id, skill, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state)
+         VALUES (?, 'meaning', ?, 1, 5, 0, 1, 1, 0, 2)`,
+        [wordId, due],
+      );
+    await card(ids[0], "2026-03-01T00:00:00.000Z");
+    const { lastInsertId } = await card(ids[1], "2026-02-01T00:00:00.000Z");
+    await db.execute("INSERT INTO review_logs (card_id, rating, correct, reviewed_at) VALUES (?, 1, 0, ?)", [
+      lastInsertId,
+      "2026-01-10T00:00:00.000Z",
+    ]);
+
+    expect(await terms("due")).toEqual(["会う", "見る", "花"]);
+    expect((await terms("mistakes"))[0]).toBe("会う");
+  });
+
+  it("lọc từ chưa có chủ đề", async () => {
+    const db = createTestDb();
+    const a = await addWord(db, { term: "一" });
+    await addWord(db, { term: "二" });
+    if (a.status !== "added") throw new Error();
+    const { lastInsertId: topicId } = await db.execute("INSERT INTO topics (name) VALUES (?)", ["Số"]);
+    await db.execute("INSERT INTO word_topics (word_id, topic_id) VALUES (?, ?)", [a.wordId, topicId]);
+
+    expect((await listWords(db, { topicId: "none" })).map((w) => w.term)).toEqual(["二"]);
+  });
 });
 
 describe("updateWord", () => {
@@ -104,6 +147,7 @@ describe("updateWord", () => {
     partOfSpeech: "động từ",
     usageNote: "",
     userNote: "nhóm 2",
+    meaningDetail: "Dùng cho người.\nKính ngữ: 召し上がる",
   };
 
   it("cập nhật các trường và updated_at", async () => {

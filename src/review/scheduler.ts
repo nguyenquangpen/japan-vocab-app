@@ -51,6 +51,11 @@ export function isReadingCorrect(answer: string, expected: string): boolean {
   return a !== "" && a === normalizeKana(expected);
 }
 
+/** Đổi hết romaji còn sót sang kana (kể cả `n` cuối). Kana và chữ Hán giữ nguyên. */
+export function romajiToKana(value: string): string {
+  return toKana(value);
+}
+
 /** Đổi romaji sang kana khi đang gõ (giữ `n` cuối chờ ký tự tiếp theo). */
 export function romajiToKanaWhileTyping(value: string): string {
   return toKana(value, { IMEMode: true });

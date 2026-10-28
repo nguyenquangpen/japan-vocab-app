@@ -21,6 +21,12 @@ pub fn run() {
             sql: include_str!("../migrations/0003_quiz_results.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 4,
+            description: "meaning_detail",
+            sql: include_str!("../migrations/0004_meaning_detail.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

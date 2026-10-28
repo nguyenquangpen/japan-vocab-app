@@ -287,3 +287,18 @@ Nguyên tắc:
 - Animation: thẻ nghĩa là flashcard lật 3D (Space hoặc bấm vào thẻ), thẻ mới trượt vào, thanh tiến độ phiên ôn/quiz, ô gõ cách đọc rung khi sai và nảy khi đúng, đáp án quiz đổi màu + rung/nảy, ô thống kê cuối phiên, chuyển tab mờ dần, gạch chân tab trượt. Tắt hết khi Windows bật "giảm chuyển động" (`prefers-reduced-motion`).
 - Icon app: `app-icon.png` (1024px, vẽ bằng System.Drawing, chữ 語 trên nền gradient), sinh bộ icon bằng `npx tauri icon app-icon.png` (xóa thư mục android/ios sinh kèm).
 - Đóng gói: chỉ NSIS (`.exe`), `installMode: currentUser` (không cần quyền Admin), phiên bản 1.0.0. Bộ cài nằm ở `src-tauri/target/release/bundle/nsis/`. Dữ liệu ở `%APPDATA%\com.quangnt.japanvocab\vocab.db`, gỡ app không xóa file này.
+
+### Hiển thị chữ Hán + kana (sau 1.0.0)
+
+- Form thêm từ và form sửa từ gọi 2 ô là **Chữ Hán (漢字)** (`term`) và **Kana (かな)** (`reading`). Ô Kana ở form thêm từ đổi romaji sang kana khi gõ (wanakana), `n` cuối đổi khi lưu.
+- Flashcard nghĩa và quiz: chữ Hán to ở trên, kana nhỏ ngay bên dưới, **luôn hiện** (bỏ quy tắc cũ "chỉ hiện cách đọc khi thẻ reading đã học", bỏ trường `readingLearned`). Từ toàn kana không lặp lại dòng kana.
+- Thẻ "Cách đọc" vẫn chỉ hiện chữ Hán (đang kiểm tra cách đọc). Thẻ mới vẫn xếp reading trước meaning để không lộ đáp án; với thẻ ôn lại, thẻ meaning có thể đến trước thẻ reading của cùng từ (chấp nhận).
+
+### Góp ý sau khi dùng (2026-10-28)
+
+- **Nghĩa mở rộng:** migration `0004_meaning_detail.sql` thêm cột `words.meaning_detail` (TEXT, tối đa 1000 ký tự, giữ xuống dòng). Chỉ tôi tự nhập ở form sửa từ, AI không điền và `saveEnrichment` không đụng tới. Hiện ở mặt sau flashcard và sau khi trả lời thẻ cách đọc.
+- **Kho từ → Danh sách:** mỗi dòng có ô tick + "Chọn tất cả" (các từ đang lọc). Khi có từ được tick hiện thanh: chọn chủ đề → **Gắn** / **Gỡ** / Bỏ chọn (`addWordsToTopic`, `removeWordsFromTopic`, 1 câu lệnh mỗi thao tác). Thay cho nút "gắn tất cả từ đang lọc" cũ.
+- Lọc chủ đề có thêm **"Không có chủ đề"** (`topicId: "none"`).
+- **Sắp xếp:** mới thêm nhất (mặc định) / cũ nhất / theo kana (`COALESCE(reading, term)`, từ chưa có kana xếp theo chữ Hán) / sắp đến hạn ôn (hạn sớm nhất của thẻ đã học, từ chưa học ở cuối) / sai nhiều nhất (số review_logs sai). Câu ORDER BY lấy từ bảng cố định trong code.
+- **Tab Thống kê:** ô số liệu (tổng từ, vững, đang học, chờ bổ sung, thẻ đến hạn hôm nay), thanh tỉ lệ trạng thái có chú thích số, biểu đồ cột lượt ôn 7 ngày (theo giờ máy, kèm tỉ lệ đúng từng ngày), thanh số từ theo chủ đề (kể cả "Không có chủ đề"), bảng 10 từ hay sai nhất. Chỉ đọc DB.
+- Bỏ ý "check trùng từ vựng" (giữ cách chặn trùng hiện có).

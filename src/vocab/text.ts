@@ -8,6 +8,7 @@ export const LIMITS = {
   partOfSpeech: 50,
   usageNote: 500,
   userNote: 1000,
+  meaningDetail: 1000,
 } as const;
 
 const KANA = /^[ぁ-ゖゝ-ゟァ-ヺー-ヿ]+$/;
@@ -20,6 +21,18 @@ export function normalizeText(value: string): string {
 /** Chuỗi rỗng sau chuẩn hóa thành null. */
 export function optionalText(value: string | null | undefined): string | null {
   const text = normalizeText(value ?? "");
+  return text === "" ? null : text;
+}
+
+/** Như optionalText nhưng giữ xuống dòng (chỉ gộp khoảng trắng trong từng dòng, tối đa 1 dòng trống liền nhau). */
+export function optionalMultiline(value: string | null | undefined): string | null {
+  const text = (value ?? "")
+    .normalize("NFKC")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return text === "" ? null : text;
 }
 
@@ -42,6 +55,7 @@ export interface CleanWord {
   partOfSpeech: string | null;
   usageNote: string | null;
   userNote: string | null;
+  meaningDetail: string | null;
 }
 
 export interface RawWord {
@@ -51,6 +65,7 @@ export interface RawWord {
   partOfSpeech?: string | null;
   usageNote?: string | null;
   userNote?: string | null;
+  meaningDetail?: string | null;
 }
 
 /** Chuẩn hóa và kiểm tra 1 từ. Trả về thông báo lỗi tiếng Việt nếu không hợp lệ. */
@@ -61,6 +76,7 @@ export function cleanWord(raw: RawWord): { ok: true; word: CleanWord } | { ok: f
   const partOfSpeech = optionalText(raw.partOfSpeech);
   const usageNote = optionalText(raw.usageNote);
   const userNote = optionalText(raw.userNote);
+  const meaningDetail = optionalMultiline(raw.meaningDetail);
 
   if (term === "") return { ok: false, message: "Chưa nhập từ." };
   if (term.length > LIMITS.term) return { ok: false, message: `Từ dài quá ${LIMITS.term} ký tự.` };
@@ -85,7 +101,10 @@ export function cleanWord(raw: RawWord): { ok: true; word: CleanWord } | { ok: f
   if (userNote !== null && userNote.length > LIMITS.userNote) {
     return { ok: false, message: `Ghi chú dài quá ${LIMITS.userNote} ký tự.` };
   }
-  return { ok: true, word: { term, reading, meanings, partOfSpeech, usageNote, userNote } };
+  if (meaningDetail !== null && meaningDetail.length > LIMITS.meaningDetail) {
+    return { ok: false, message: `Nghĩa mở rộng dài quá ${LIMITS.meaningDetail} ký tự.` };
+  }
+  return { ok: true, word: { term, reading, meanings, partOfSpeech, usageNote, userNote, meaningDetail } };
 }
 
 /**

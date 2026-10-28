@@ -56,8 +56,13 @@ describe("cleanWord", () => {
         partOfSpeech: null,
         usageNote: null,
         userNote: null,
+        meaningDetail: null,
       },
     });
+  });
+  it("nghĩa mở rộng giữ xuống dòng, gộp dòng trống thừa", () => {
+    const result = cleanWord({ term: "食べる", meaningDetail: "  dòng 1  \r\n\r\n\r\n  dòng   2 " });
+    expect(result).toMatchObject({ ok: true, word: { meaningDetail: "dòng 1\n\ndòng 2" } });
   });
   it("chặn term rỗng", () => {
     expect(cleanWord({ term: "  " })).toMatchObject({ ok: false });

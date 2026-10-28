@@ -17,8 +17,7 @@ export interface ReviewItem {
   reading: string;
   meanings: string[];
   example: { ja: string; vi: string | null } | null;
-  /** Thẻ reading của từ này đã được học (thẻ meaning hiện kèm cách đọc). */
-  readingLearned: boolean;
+  meaningDetail: string | null;
   /** Từ chỉ viết bằng kana: thẻ reading hiện nghĩa và bắt gõ lại từ. */
   kanaOnly: boolean;
 }
@@ -103,17 +102,12 @@ export async function submitReview(
     "INSERT INTO review_logs (card_id, rating, answer, correct, reviewed_at) VALUES (?, ?, ?, ?, ?)",
     [item.cardId, rating, answer, correct ? 1 : 0, now.toISOString()],
   );
-  return { ...item, card: c, readingLearned: item.readingLearned || item.skill === "reading" };
+  return { ...item, card: c };
 }
 
-/**
- * Hàng đợi sau khi chấm thẻ đầu: bỏ thẻ đầu, cập nhật thẻ cùng từ, xếp lại cuối
- * nếu thẻ đến hạn trong LEARN_AHEAD_MINUTES.
- */
+/** Hàng đợi sau khi chấm thẻ đầu: bỏ thẻ đầu, xếp lại cuối nếu thẻ đến hạn trong LEARN_AHEAD_MINUTES. */
 export function advanceQueue(queue: ReviewItem[], graded: ReviewItem, now: Date): ReviewItem[] {
-  const rest = queue
-    .slice(1)
-    .map((i) => (i.wordId === graded.wordId ? { ...i, readingLearned: graded.readingLearned } : i));
+  const rest = queue.slice(1);
   const soon = new Date(graded.card.due).getTime() <= now.getTime() + LEARN_AHEAD_MINUTES * 60_000;
   return soon ? [...rest, graded] : rest;
 }
@@ -132,8 +126,7 @@ export async function getReviewOverview(db: Db): Promise<ReviewOverview> {
 const ITEM_SELECT = `
   SELECT c.id AS card_id, c.word_id, c.skill, c.due, c.stability, c.difficulty, c.elapsed_days,
     c.scheduled_days, c.learning_steps, c.reps, c.lapses, c.state, c.last_review,
-    w.term, w.reading, w.meanings_vi,
-    (SELECT r.state FROM cards r WHERE r.word_id = w.id AND r.skill = 'reading') AS reading_state,
+    w.term, w.reading, w.meanings_vi, w.meaning_detail,
     (SELECT e.ja FROM examples e WHERE e.word_id = w.id ORDER BY e.id LIMIT 1) AS example_ja,
     (SELECT e.vi FROM examples e WHERE e.word_id = w.id ORDER BY e.id LIMIT 1) AS example_vi
   FROM cards c JOIN words w ON w.id = c.word_id`;
@@ -155,7 +148,7 @@ interface ItemRow {
   term: string;
   reading: string;
   meanings_vi: string;
-  reading_state: number | null;
+  meaning_detail: string | null;
   example_ja: string | null;
   example_vi: string | null;
 }
@@ -181,13 +174,13 @@ function toItem(row: ItemRow): ReviewItem {
     reading: row.reading,
     meanings: parseMeanings(row.meanings_vi),
     example: row.example_ja ? { ja: row.example_ja, vi: row.example_vi } : null,
-    readingLearned: row.reading_state !== null && row.reading_state !== State.New,
+    meaningDetail: row.meaning_detail,
     kanaOnly: isKana(row.term),
   };
 }
 
 /**
- * Thẻ mới: reading trước meaning (mặt sau thẻ meaning lộ cách đọc).
+ * Thẻ mới: reading trước meaning (thẻ meaning hiện kana dưới chữ Hán, sẽ lộ đáp án thẻ reading).
  * Từ toàn kana thì ngược lại (thẻ reading của chúng lộ nghĩa).
  */
 function orderNewCards(items: ReviewItem[]): ReviewItem[] {

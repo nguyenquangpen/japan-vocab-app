@@ -77,19 +77,14 @@ describe("loadSession", () => {
     expect(session).toHaveLength(1);
   });
 
-  it("thẻ meaning biết cách đọc đã học sau khi ôn thẻ reading", async () => {
+  it("thẻ reading chưa đến hạn thì phiên sau chỉ còn thẻ meaning mới", async () => {
     const db = createTestDb();
     await add(db, "食べる", "たべる", "ăn");
-    const [reading, meaning] = await loadSession(db, DEFAULT_SETTINGS, NOW);
-    expect(meaning.readingLearned).toBe(false);
+    const [reading] = await loadSession(db, DEFAULT_SETTINGS, NOW);
+    await submitReview(db, reading, Rating.Good, "たべる", true, NOW);
 
-    const graded = await submitReview(db, reading, Rating.Good, "たべる", true, NOW);
-    expect(advanceQueue([reading, meaning], graded, NOW)[0].readingLearned).toBe(true);
-
-    // Phút thứ 1: thẻ reading chưa đến hạn (10 phút), chỉ còn thẻ meaning mới.
-    const [again] = await loadSession(db, DEFAULT_SETTINGS, at(1));
-    expect(again.skill).toBe("meaning");
-    expect(again.readingLearned).toBe(true);
+    // Phút thứ 1: thẻ reading đến hạn sau 10 phút.
+    expect(label(await loadSession(db, DEFAULT_SETTINGS, at(1)))).toEqual(["食べる:meaning"]);
   });
 });
 

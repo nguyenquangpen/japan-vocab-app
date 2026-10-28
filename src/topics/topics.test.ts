@@ -8,6 +8,7 @@ import {
   getWordTopicIds,
   listTopics,
   removeWordFromTopic,
+  removeWordsFromTopic,
   renameTopic,
 } from "./topics";
 
@@ -56,6 +57,9 @@ describe("topics", () => {
 
     await removeWordFromTopic(db, ids[1], t.id);
     expect((await listWords(db, { topicId: t.id })).map((w) => w.term).sort()).toEqual(["見る", "食べる"]);
+
+    expect(await removeWordsFromTopic(db, t.id, [ids[0], ids[1], ids[2]])).toBe(2);
+    expect((await listTopics(db))[0].wordCount).toBe(0);
   });
 
   it("xóa chủ đề không xóa từ", async () => {

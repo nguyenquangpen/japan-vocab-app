@@ -220,8 +220,12 @@ function QuizRun({ questions, onFinish }: { questions: Question[]; onFinish: (an
       <span className="card-label">
         Câu {index + 1}/{questions.length} · Nghĩa của từ này?
       </span>
-      <div className="jp review-term">{question.term}</div>
-      {picked !== null && question.reading && <div className="jp review-reading">{question.reading}</div>}
+      <div className="term-block">
+        <div className="jp review-term">{question.term}</div>
+        {question.reading && question.reading !== question.term && (
+          <div className="jp term-kana">{question.reading}</div>
+        )}
+      </div>
       <div className="quiz-options">
         {question.options.map((option, i) => {
           const state =

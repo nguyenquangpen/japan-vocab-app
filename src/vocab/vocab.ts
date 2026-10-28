@@ -31,6 +31,8 @@ export interface WordDetail extends WordSummary {
   partOfSpeech: string | null;
   usageNote: string | null;
   userNote: string | null;
+  /** Nghĩa mở rộng, chỉ tôi tự nhập (AI không điền). Giữ xuống dòng. */
+  meaningDetail: string | null;
   confusables: { term: string; note: string }[];
   examples: { id: number; ja: string; reading: string | null; vi: string | null }[];
   createdAt: string;
@@ -52,6 +54,7 @@ export interface WordEdit {
   partOfSpeech: string;
   usageNote: string;
   userNote: string;
+  meaningDetail: string;
 }
 
 export type AddResult =
@@ -74,11 +77,26 @@ export type UpdateResult =
 /** pending = chờ bổ sung, learning = đã bổ sung nhưng chưa vững, mastered = vững. */
 export type WordStatus = "pending" | "learning" | "mastered";
 
+export type WordSort = "newest" | "oldest" | "kana" | "due" | "mistakes";
+
 export interface WordFilter {
   query?: string;
   status?: WordStatus;
-  topicId?: number;
+  /** "none" = từ chưa gắn chủ đề nào. */
+  topicId?: number | "none";
+  sort?: WordSort;
 }
+
+// Chỉ ghép chuỗi từ danh sách cố định này, không bao giờ từ dữ liệu người dùng.
+const ORDER_BY: Record<WordSort, string> = {
+  newest: "created_at DESC, id DESC",
+  oldest: "created_at ASC, id ASC",
+  kana: "COALESCE(reading, term) ASC, id ASC",
+  due: `(SELECT MIN(c.due) FROM cards c WHERE c.word_id = words.id AND c.state != 0) IS NULL,
+        (SELECT MIN(c.due) FROM cards c WHERE c.word_id = words.id AND c.state != 0) ASC, id ASC`,
+  mistakes: `(SELECT COUNT(*) FROM review_logs l JOIN cards c ON c.id = l.card_id
+              WHERE c.word_id = words.id AND l.correct = 0) DESC, created_at DESC, id DESC`,
+};
 
 const MASTERED_SQL = `(
   (SELECT COUNT(*) FROM cards c WHERE c.word_id = words.id) = 2
@@ -143,7 +161,9 @@ export async function listWords(db: Db, filter: WordFilter = {}): Promise<WordSu
   if (filter.status === "pending") where.push("enriched = 0");
   if (filter.status === "learning") where.push(`enriched = 1 AND NOT ${MASTERED_SQL}`);
   if (filter.status === "mastered") where.push(MASTERED_SQL);
-  if (filter.topicId !== undefined) {
+  if (filter.topicId === "none") {
+    where.push("NOT EXISTS (SELECT 1 FROM word_topics wt WHERE wt.word_id = words.id)");
+  } else if (filter.topicId !== undefined) {
     where.push("EXISTS (SELECT 1 FROM word_topics wt WHERE wt.word_id = words.id AND wt.topic_id = ?)");
     params.push(filter.topicId);
   }
@@ -151,7 +171,7 @@ export async function listWords(db: Db, filter: WordFilter = {}): Promise<WordSu
   const rows = await db.select<WordRow>(
     `SELECT id, term, reading, meanings_vi, enriched, ${MASTERED_SQL} AS mastered FROM words
      ${where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""}
-     ORDER BY created_at DESC, id DESC`,
+     ORDER BY ${ORDER_BY[filter.sort ?? "newest"]}`,
     params,
   );
   return rows.map(toSummary);
@@ -169,6 +189,7 @@ export async function getWord(db: Db, id: number): Promise<WordDetail | null> {
     partOfSpeech: row.part_of_speech ?? null,
     usageNote: row.usage_note ?? null,
     userNote: row.user_note ?? null,
+    meaningDetail: row.meaning_detail ?? null,
     confusables: parseJsonArray(row.confusables) as WordDetail["confusables"],
     examples,
     createdAt: row.created_at ?? "",
@@ -188,11 +209,11 @@ export async function updateWord(
 
   const { rowsAffected } = await db.execute(
     `UPDATE words SET term = ?, reading = ?, meanings_vi = ?, part_of_speech = ?,
-       usage_note = ?, user_note = ?, updated_at = ?
+       usage_note = ?, user_note = ?, meaning_detail = ?, updated_at = ?
      WHERE id = ? AND NOT EXISTS (SELECT 1 FROM words WHERE id != ? AND ${SAME_WORD})`,
     [
       w.term, w.reading, encodeMeanings(w.meanings), w.partOfSpeech, w.usageNote, w.userNote,
-      now.toISOString(), id, id, w.term, w.reading, w.reading,
+      w.meaningDetail, now.toISOString(), id, id, w.term, w.reading, w.reading,
     ],
   );
   if (rowsAffected > 0) return { status: "updated" };
@@ -314,6 +335,7 @@ interface WordRow {
   part_of_speech?: string | null;
   usage_note?: string | null;
   user_note?: string | null;
+  meaning_detail?: string | null;
   confusables?: string | null;
   created_at?: string;
   updated_at?: string;
