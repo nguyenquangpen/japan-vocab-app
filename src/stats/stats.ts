@@ -24,7 +24,7 @@ export interface VocabStats {
   pending: number;
   learning: number;
   mastered: number;
-  /** Từ chưa đủ cách đọc hoặc nghĩa nên chưa vào ôn. */
+  /** Từ chưa có nghĩa nên chưa vào ôn. */
   notReady: number;
   /** Thẻ đã học đến hạn trước hết hôm nay. */
   dueToday: number;
@@ -39,9 +39,8 @@ export interface VocabStats {
 export const STATS_DAYS = 7;
 
 export async function loadStats(db: Db, now = new Date()): Promise<VocabStats> {
-  const mastered = `(
-    (SELECT COUNT(*) FROM cards c WHERE c.word_id = w.id) = 2
-    AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.word_id = w.id AND c.stability < ${MASTERED_STABILITY})
+  const mastered = `EXISTS (
+    SELECT 1 FROM cards c WHERE c.word_id = w.id AND c.skill = 'meaning' AND c.stability >= ${MASTERED_STABILITY}
   )`;
   const [counts] = await db.select<{
     total: number;
@@ -55,7 +54,7 @@ export async function loadStats(db: Db, now = new Date()): Promise<VocabStats> {
        COALESCE(SUM(w.enriched = 0), 0) AS pending,
        COALESCE(SUM(${mastered}), 0) AS mastered,
        COALESCE(SUM(w.enriched = 1 AND NOT ${mastered}), 0) AS learning,
-       COALESCE(SUM(w.reading IS NULL OR w.meanings_vi IS NULL), 0) AS not_ready,
+       COALESCE(SUM(w.meanings_vi IS NULL), 0) AS not_ready,
        COALESCE(SUM(NOT EXISTS (SELECT 1 FROM word_topics wt WHERE wt.word_id = w.id)), 0) AS no_topic
      FROM words w`,
   );
@@ -63,7 +62,7 @@ export async function loadStats(db: Db, now = new Date()): Promise<VocabStats> {
   const today = startOfLocalDay(now);
   const tomorrow = addDays(today, 1);
   const [{ n: dueToday }] = await db.select<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM cards WHERE state != ? AND due < ?",
+    "SELECT COUNT(*) AS n FROM cards WHERE skill = 'meaning' AND state != ? AND due < ?",
     [State.New, tomorrow.toISOString()],
   );
 

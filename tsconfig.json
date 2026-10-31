@@ -33,6 +33,7 @@
   ],
   "exclude": [
     "src/**/*.test.ts",
+    "src/**/*.test.tsx",
     "src/db/nodeSqliteDb.ts"
   ]
 }

@@ -302,3 +302,48 @@ Nguyên tắc:
 - **Sắp xếp:** mới thêm nhất (mặc định) / cũ nhất / theo kana (`COALESCE(reading, term)`, từ chưa có kana xếp theo chữ Hán) / sắp đến hạn ôn (hạn sớm nhất của thẻ đã học, từ chưa học ở cuối) / sai nhiều nhất (số review_logs sai). Câu ORDER BY lấy từ bảng cố định trong code.
 - **Tab Thống kê:** ô số liệu (tổng từ, vững, đang học, chờ bổ sung, thẻ đến hạn hôm nay), thanh tỉ lệ trạng thái có chú thích số, biểu đồ cột lượt ôn 7 ngày (theo giờ máy, kèm tỉ lệ đúng từng ngày), thanh số từ theo chủ đề (kể cả "Không có chủ đề"), bảng 10 từ hay sai nhất. Chỉ đọc DB.
 - Bỏ ý "check trùng từ vựng" (giữ cách chặn trùng hiện có).
+
+### Sửa thẻ kiểm tra cách đọc (2026-10-28)
+
+- **Lỗi:** key của thẻ ôn có chứa số lượt đã ôn. Chấm thẻ cách đọc làm tăng số này → thẻ bị dựng lại, mất dòng Đúng/Sai, hàng đợi không chạy tiếp. Sửa: key dùng bộ đếm `turn`, chỉ tăng khi sang thẻ tiếp.
+- **Nút Quên trên thẻ cách đọc** ("Quên – xem đáp án", phím Esc): tính là sai (Again, `answer = NULL`), hiện đáp án + nghĩa + nghĩa mở rộng + ví dụ, Enter sang thẻ tiếp.
+- **Test giao diện:** Vitest + jsdom + `@testing-library/react` (file `*.test.tsx`, dòng đầu `// @vitest-environment jsdom`), dùng DB thật `node:sqlite`, giả lập clipboard. Có test cho thẻ cách đọc (sai/đúng/Quên/Esc), lật flashcard nghĩa, quiz.
+
+### Ôn tập chỉ bằng flashcard (2026-10-28, thay mục 4 "Cách chấm theo kỹ năng")
+
+- **Bỏ thẻ gõ cách đọc.** Ôn tập chỉ còn flashcard: **mặt trước** chữ Hán to + kana nhỏ (từ toàn kana hoặc chưa có kana thì chỉ 1 dòng), **mặt sau** nghĩa + nghĩa mở rộng + ví dụ. Bấm vào thẻ hoặc Space/Enter để lật (lật qua lại được).
+- **Chấm:** kéo thẻ sang **trái = Quên** (Again), sang **phải = Nhớ** (Good), ngưỡng 110px; kéo chưa đủ thì thẻ bật về. Khi kéo hiện dấu QUÊN/NHỚ, quá ngưỡng thì thẻ bay ra (250ms) rồi mới chấm. Phím ←/→ làm tương tự. Nút chấm (2 hoặc 4 theo setting, phím số) luôn hiện dưới thẻ.
+- **Mỗi từ 1 thẻ** (`skill = 'meaning'`). `ensureCards` chỉ tạo thẻ meaning; thẻ `reading` cũ vẫn trong DB nhưng bị bỏ qua ở phiên ôn, hạn gần nhất, thẻ đến hạn hôm nay. `review_logs.answer` luôn NULL từ nay.
+- **Điều kiện vào ôn:** chỉ cần có nghĩa (`meanings_vi IS NOT NULL`), kana không bắt buộc.
+- **"Đã nhớ vững":** thẻ meaning có `stability >= 21`.
+- Từ mới theo thứ tự thêm (cũ nhất trước), giới hạn `new_per_day` thẻ/ngày.
+- Prompt cuối phiên đổi thành "giải thích các từ đã quên" (term, kana, nghĩa).
+- Gỡ `isReadingCorrect`, `normalizeKana`, kiểu `Skill`, nút Quên/ô gõ của thẻ cách đọc. Vẫn giữ `romajiToKana` cho ô Kana ở form thêm từ.
+
+### Lượt ôn, luyện thêm, chúc mừng (2026-10-28, thay "Luồng phiên học" mục 4)
+
+- **Tắt bước học ngắn của FSRS** (`enable_short_term: false`). Trước đó kéo Nhớ thẻ mới chỉ hẹn 10 phút → thẻ quay lại ngay trong phiên và ở lần tải lại sau (bug). Giờ mỗi lần chấm hẹn theo ngày (thẻ mới: Quên ≈ 1 ngày, Nhớ ≈ 3 ngày).
+- **Lượt ôn chính:** tối đa `session_size` thẻ (Cài đặt "Số thẻ mỗi lượt", 5–50, mặc định 15; key cũ `max_reviews_per_session` bỏ). Thẻ đến hạn trước, còn chỗ thì bù từ mới (cũ nhất trước) trong giới hạn `new_per_day`. **Mỗi thẻ hiện đúng 1 lần trong lượt**, không xếp lại cuối.
+- **Số đếm trên nút:** mỗi nút chấm hiện số lần đã bấm trong lượt (Quên · 3, Nhớ · 7), cập nhật ngay.
+- **Hết lượt:** pháo giấy CSS (~3 giây), 1 câu động lực ngẫu nhiên theo tỉ lệ nhớ (100% / ≥70% / còn lại), ô thống kê, danh sách từ đã quên + copy prompt. Nút học tiếp (chỉ hiện khi có dữ liệu):
+  - Ôn lại N từ vừa quên · Ôn lại các từ vừa học · Từ vừa học + từ cũ (thêm ⌈size/2⌉ từ cũ chọn có trọng số) — sau lượt chấm theo lịch.
+  - Lượt ôn tiếp theo (thẻ đến hạn + từ mới còn lại hôm nay).
+  - Học thêm từ mới: `session_size` từ mới tiếp theo, **vượt** `new_per_day`.
+  - Luyện ngẫu nhiên: chọn `session_size` thẻ đã học, trọng số `0.05 + (1 − R) + 1/(1 + stability)` (R = khả năng nhớ FSRS lúc này) → từ yếu/mới học hay ra, từ đã thuộc hiếm ra (~10–17 lần ít hơn).
+  - Hết sạch vốn từ (không thẻ đến hạn, không từ mới): "🏁 Bạn đã ôn hết toàn bộ vốn từ!" + **Luyện lại toàn bộ từ đầu** (xáo cả vốn từ, đi lần lượt theo từng lượt, "Luyện tiếp toàn bộ (còn N từ)").
+- **Chỉ lượt chính và "Học thêm từ mới" ghi lịch FSRS + review_logs.** Các lượt luyện thêm không ghi DB (như quiz), có nhãn "Luyện thêm · không đổi lịch ôn", luôn dùng 2 nút Quên/Nhớ.
+- Test giao diện gửi phím sau `act(async () => {})` để bộ nghe phím (gắn trong useEffect) đã sẵn sàng.
+- **Sửa (cùng ngày): luyện thêm trên toàn bộ vốn từ.** "Luyện ngẫu nhiên" và "Luyện toàn bộ" lấy từ **mọi từ có nghĩa, kể cả từ chưa ôn lần nào** (`loadPracticePool`), không chỉ từ đã học — trước đó kho chỉ vài từ đã ôn nên lượt nào cũng lặp lại. Từ chưa ôn có trọng số ≈ 2 nên hay ra; từ đã thuộc ≈ 0.05–0.2.
+  - Luyện ngẫu nhiên **tránh các từ của lượt ngay trước**, chỉ lấy lại khi các từ khác không đủ.
+  - "Từ vừa học + từ cũ": phần "từ cũ" chỉ lấy từ đã ôn trước đây.
+  - Nút **"Luyện toàn bộ vốn từ (N từ)"** luôn hiện (không chỉ khi đã ôn hết), đi lần lượt qua cả kho theo từng lượt.
+  - Lượt ôn chính vẫn theo lịch FSRS (thẻ đến hạn + từ mới trong `new_per_day`); muốn lượt chính có nhiều từ mới hơn thì tăng "Số từ mới mỗi ngày" trong Cài đặt.
+
+### Sửa ví dụ + chọn phạm vi ôn (2026-10-31)
+
+- **Sửa ví dụ trong Kho từ:** form sửa từ có danh sách ví dụ sửa được (câu tiếng Nhật, cách đọc tùy chọn, nghĩa), nút Xóa từng ví dụ, "+ Thêm ví dụ"; lưu cùng nút Lưu của từ. `WordEdit.examples` thay toàn bộ ví dụ (`cleanExamples`: dòng trống hết bị bỏ qua, có nghĩa mà thiếu câu tiếng Nhật → lỗi, mỗi ô ≤ 200 ký tự, tối đa 10 ví dụ). Kiểm tra hết trước khi ghi; ghi từ trước rồi thay ví dụ (`replaceExamples`, dùng chung với `saveEnrichment`). Từ dễ nhầm vẫn chỉ hiển thị.
+- **Mở tab Ôn tập là màn chọn**, không vào ôn ngay:
+  1. **Ôn phần nào:** Tất cả từ / Theo chủ đề (chọn 1 hoặc nhiều, lấy từ thuộc ít nhất 1 chủ đề) / Từ chưa có chủ đề. Kiểu `ReviewScope`, SQL qua `scopeSql` (tham số `?`).
+  2. **Ôn thế nào** (kèm số trong phạm vi): Ôn theo lịch · Học từ mới · Luyện ngẫu nhiên · Luyện toàn bộ.
+  - Mọi lượt sau (nút ở màn hết lượt) giữ phạm vi đã chọn; màn hết lượt có nhãn phạm vi + nút "Đổi phạm vi ôn". Giới hạn từ mới mỗi ngày là chung, không chia theo phạm vi.
+- **Ví dụ trên mặt sau flashcard** hiện đủ 3 dòng: câu tiếng Nhật (chữ Hán), **cách đọc kana** (chữ nhỏ, màu nhấn; ẩn nếu ví dụ chưa có cách đọc hoặc trùng với câu), nghĩa tiếng Việt. Vẫn chỉ hiện ví dụ đầu tiên của từ.

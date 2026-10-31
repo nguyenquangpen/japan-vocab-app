@@ -2,21 +2,25 @@ import { describe, expect, it } from "vitest";
 import { buildMistakesPrompt } from "./mistakesPrompt";
 
 describe("buildMistakesPrompt", () => {
-  it("liệt kê từ sai theo kỹ năng, bỏ lặp, chèn level", () => {
+  it("liệt kê từ đã quên, bỏ lặp, không lặp kana với từ toàn kana, chèn level", () => {
     const prompt = buildMistakesPrompt(
       [
-        { term: "食べる", reading: "たべる", meanings: ["ăn", "dùng bữa"], skill: "reading", answer: "たべた" },
-        { term: "食べる", reading: "たべる", meanings: ["ăn", "dùng bữa"], skill: "reading", answer: "たべた" },
-        { term: "見る", reading: "みる", meanings: ["xem"], skill: "meaning", answer: null },
+        { term: "食べる", reading: "たべる", meanings: ["ăn", "dùng bữa"] },
+        { term: "食べる", reading: "たべる", meanings: ["ăn", "dùng bữa"] },
+        { term: "ありがとう", reading: "ありがとう", meanings: ["cảm ơn"] },
+        { term: "猫", reading: null, meanings: ["con mèo"] },
       ],
       "N4",
     );
     expect(prompt).toContain("trình độ học viên: N4.");
     expect(prompt).toContain("không vượt quá trình độ N4.");
-    expect(prompt.endsWith(
-      "Các từ trả lời sai:\n" +
-        "1. 食べる (たべる) — nghĩa: ăn; dùng bữa — kỹ năng: cách đọc — tôi gõ: たべた\n" +
-        "2. 見る (みる) — nghĩa: xem — kỹ năng: nghĩa — tôi tự chấm là quên",
-    )).toBe(true);
+    expect(
+      prompt.endsWith(
+        "Các từ tôi quên:\n" +
+          "1. 食べる (たべる) — nghĩa: ăn; dùng bữa\n" +
+          "2. ありがとう — nghĩa: cảm ơn\n" +
+          "3. 猫 — nghĩa: con mèo",
+      ),
+    ).toBe(true);
   });
 });

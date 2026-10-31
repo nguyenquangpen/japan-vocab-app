@@ -37,7 +37,7 @@ export default tseslint.config(
   {
     // Code giao diện không được dùng module của Node (chỉ test mới dùng).
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/**/*.test.ts", "src/db/nodeSqliteDb.ts"],
+    ignores: ["src/**/*.test.{ts,tsx}", "src/db/nodeSqliteDb.ts"],
     rules: {
       "no-restricted-imports": ["error", { patterns: ["node:*", "**/nodeSqliteDb"] }],
     },

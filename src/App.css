@@ -368,12 +368,6 @@ select {
   gap: 8px;
 }
 
-.review-input {
-  max-width: 320px;
-  font-size: 1.5rem;
-  text-align: center;
-}
-
 .grade-row {
   justify-content: center;
 }

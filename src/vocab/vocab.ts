@@ -1,11 +1,12 @@
 import type { Db } from "../db/db";
 import { MASTERED_STABILITY } from "../review/scheduler";
 import {
+  cleanExamples,
   cleanWord,
   normalizeText,
-  optionalText,
   parseBatchLine,
   splitMeanings,
+  type CleanExample,
   type CleanWord,
 } from "./text";
 
@@ -23,7 +24,7 @@ export interface WordSummary {
   reading: string | null;
   meanings: string[];
   enriched: boolean;
-  /** Cả 2 thẻ có stability >= MASTERED_STABILITY. */
+  /** Thẻ meaning có stability >= MASTERED_STABILITY. */
   mastered: boolean;
 }
 
@@ -55,6 +56,8 @@ export interface WordEdit {
   usageNote: string;
   userNote: string;
   meaningDetail: string;
+  /** Thay toàn bộ ví dụ của từ. Dòng để trống hết bị bỏ qua. */
+  examples: { ja: string; reading: string; vi: string }[];
 }
 
 export type AddResult =
@@ -98,9 +101,8 @@ const ORDER_BY: Record<WordSort, string> = {
               WHERE c.word_id = words.id AND l.correct = 0) DESC, created_at DESC, id DESC`,
 };
 
-const MASTERED_SQL = `(
-  (SELECT COUNT(*) FROM cards c WHERE c.word_id = words.id) = 2
-  AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.word_id = words.id AND c.stability < ${MASTERED_STABILITY})
+const MASTERED_SQL = `EXISTS (
+  SELECT 1 FROM cards c WHERE c.word_id = words.id AND c.skill = 'meaning' AND c.stability >= ${MASTERED_STABILITY}
 )`;
 
 // Điều kiện trùng, tham số: term, reading, reading.
@@ -206,6 +208,8 @@ export async function updateWord(
   const cleaned = cleanWord(edit);
   if (!cleaned.ok) return { status: "invalid", message: cleaned.message };
   const w = cleaned.word;
+  const examples = cleanExamples(edit.examples);
+  if (!examples.ok) return { status: "invalid", message: examples.message };
 
   const { rowsAffected } = await db.execute(
     `UPDATE words SET term = ?, reading = ?, meanings_vi = ?, part_of_speech = ?,
@@ -216,11 +220,24 @@ export async function updateWord(
       w.meaningDetail, now.toISOString(), id, id, w.term, w.reading, w.reading,
     ],
   );
-  if (rowsAffected > 0) return { status: "updated" };
+  if (rowsAffected > 0) {
+    await replaceExamples(db, id, examples.examples);
+    return { status: "updated" };
+  }
 
   const [self] = await db.select<{ id: number }>("SELECT id FROM words WHERE id = ?", [id]);
   if (!self) return { status: "not_found" };
   return { status: "duplicate", wordId: (await findOtherSameWord(db, id, w)) ?? id };
+}
+
+/** Thay toàn bộ ví dụ của 1 từ: xóa rồi chèn bằng 1 câu. Chạy lại không nhân đôi. */
+async function replaceExamples(db: Db, wordId: number, examples: CleanExample[]): Promise<void> {
+  await db.execute("DELETE FROM examples WHERE word_id = ?", [wordId]);
+  if (examples.length === 0) return;
+  await db.execute(
+    `INSERT INTO examples (word_id, ja, reading, vi) VALUES ${examples.map(() => "(?, ?, ?, ?)").join(", ")}`,
+    examples.flatMap((e) => [wordId, e.ja, e.reading, e.vi]),
+  );
 }
 
 async function findOtherSameWord(db: Db, id: number, w: CleanWord): Promise<number | null> {
@@ -264,21 +281,13 @@ export async function saveEnrichment(
   if (!cleaned.ok) return { status: "invalid", message: cleaned.message };
   const w = cleaned.word;
 
+  const examples = data.examples === null ? null : cleanExamples(data.examples.filter((e) => normalizeText(e.ja) !== ""));
+  if (examples && !examples.ok) return { status: "invalid", message: examples.message };
+
   const duplicate = await findOtherSameWord(db, id, w);
   if (duplicate !== null) return { status: "duplicate", wordId: duplicate };
 
-  if (data.examples !== null) {
-    await db.execute("DELETE FROM examples WHERE word_id = ?", [id]);
-    const examples = data.examples
-      .map((e) => ({ ja: normalizeText(e.ja), reading: optionalText(e.reading), vi: optionalText(e.vi) }))
-      .filter((e) => e.ja !== "");
-    if (examples.length > 0) {
-      await db.execute(
-        `INSERT INTO examples (word_id, ja, reading, vi) VALUES ${examples.map(() => "(?, ?, ?, ?)").join(", ")}`,
-        examples.flatMap((e) => [id, e.ja, e.reading, e.vi]),
-      );
-    }
-  }
+  if (examples) await replaceExamples(db, id, examples.examples);
 
   const confusables = data.confusables
     .map((c) => ({ term: normalizeText(c.term), note: normalizeText(c.note) }))

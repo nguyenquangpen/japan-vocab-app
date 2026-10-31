@@ -148,6 +148,7 @@ describe("updateWord", () => {
     usageNote: "",
     userNote: "nhóm 2",
     meaningDetail: "Dùng cho người.\nKính ngữ: 召し上がる",
+    examples: [] as { ja: string; reading: string; vi: string }[],
   };
 
   it("cập nhật các trường và updated_at", async () => {
@@ -162,6 +163,40 @@ describe("updateWord", () => {
       usageNote: null,
       updatedAt: later.toISOString(),
     });
+  });
+
+  it("sửa, thêm, xóa ví dụ: thay toàn bộ, bỏ dòng trống, chuẩn hóa", async () => {
+    const db = createTestDb();
+    const added = await addWord(db, { term: "食べる" });
+    if (added.status !== "added") throw new Error();
+    await db.execute("INSERT INTO examples (word_id, ja, vi) VALUES (?, ?, ?), (?, ?, ?)", [
+      added.wordId, "ご飯を食べる。", "Ăn cơm.", added.wordId, "câu sai 食べる", "xóa đi",
+    ]);
+
+    const result = await updateWord(db, added.wordId, {
+      ...edit,
+      examples: [
+        { ja: " パンを食べた。 ", reading: "ぱんをたべた。", vi: " Đã ăn bánh mì. " },
+        { ja: "", reading: "", vi: "" },
+        { ja: "毎朝ご飯を食べます。", reading: "", vi: "Sáng nào cũng ăn cơm." },
+      ],
+    });
+    expect(result).toEqual({ status: "updated" });
+    expect((await getWord(db, added.wordId))?.examples.map(({ ja, reading, vi }) => ({ ja, reading, vi }))).toEqual([
+      { ja: "パンを食べた。", reading: "ぱんをたべた。", vi: "Đã ăn bánh mì." },
+      { ja: "毎朝ご飯を食べます。", reading: null, vi: "Sáng nào cũng ăn cơm." },
+    ]);
+  });
+
+  it("ví dụ thiếu câu tiếng Nhật thì báo lỗi và không lưu gì", async () => {
+    const db = createTestDb();
+    const added = await addWord(db, { term: "食べる" });
+    if (added.status !== "added") throw new Error();
+    await db.execute("INSERT INTO examples (word_id, ja) VALUES (?, ?)", [added.wordId, "ご飯を食べる。"]);
+
+    const result = await updateWord(db, added.wordId, { ...edit, examples: [{ ja: "", reading: "", vi: "chỉ có nghĩa" }] });
+    expect(result).toEqual({ status: "invalid", message: "Ví dụ thứ 1 chưa có câu tiếng Nhật." });
+    expect(await getWord(db, added.wordId)).toMatchObject({ term: "食べる", examples: [{ ja: "ご飯を食べる。" }] });
   });
 
   it("không cho sửa thành từ đã có", async () => {

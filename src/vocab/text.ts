@@ -9,6 +9,8 @@ export const LIMITS = {
   usageNote: 500,
   userNote: 1000,
   meaningDetail: 1000,
+  exampleText: 200,
+  examples: 10,
 } as const;
 
 const KANA = /^[ぁ-ゖゝ-ゟァ-ヺー-ヿ]+$/;
@@ -105,6 +107,36 @@ export function cleanWord(raw: RawWord): { ok: true; word: CleanWord } | { ok: f
     return { ok: false, message: `Nghĩa mở rộng dài quá ${LIMITS.meaningDetail} ký tự.` };
   }
   return { ok: true, word: { term, reading, meanings, partOfSpeech, usageNote, userNote, meaningDetail } };
+}
+
+export interface CleanExample {
+  ja: string;
+  reading: string | null;
+  vi: string | null;
+}
+
+/**
+ * Chuẩn hóa và kiểm tra danh sách ví dụ. Dòng để trống hết thì bỏ qua;
+ * có cách đọc/nghĩa mà thiếu câu tiếng Nhật thì báo lỗi.
+ */
+export function cleanExamples(
+  raw: { ja: string; reading?: string | null; vi?: string | null }[],
+): { ok: true; examples: CleanExample[] } | { ok: false; message: string } {
+  const examples: CleanExample[] = [];
+  for (const [index, e] of raw.entries()) {
+    const ja = normalizeText(e.ja);
+    const reading = optionalText(e.reading);
+    const vi = optionalText(e.vi);
+    if (ja === "" && reading === null && vi === null) continue;
+    const n = index + 1;
+    if (ja === "") return { ok: false, message: `Ví dụ thứ ${n} chưa có câu tiếng Nhật.` };
+    if ([ja, reading ?? "", vi ?? ""].some((t) => t.length > LIMITS.exampleText)) {
+      return { ok: false, message: `Ví dụ thứ ${n} dài quá ${LIMITS.exampleText} ký tự mỗi ô.` };
+    }
+    examples.push({ ja, reading, vi });
+  }
+  if (examples.length > LIMITS.examples) return { ok: false, message: `Tối đa ${LIMITS.examples} ví dụ.` };
+  return { ok: true, examples };
 }
 
 /**

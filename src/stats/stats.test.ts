@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Db } from "../db/db";
 import { createTestDb } from "../db/nodeSqliteDb";
-import { loadSession, submitReview } from "../review/review";
+import { loadMainRound, submitReview } from "../review/review";
 import { Rating } from "../review/scheduler";
 import { DEFAULT_SETTINGS } from "../settings/settings";
 import { addWordsToTopic, createTopic } from "../topics/topics";
@@ -36,10 +36,11 @@ describe("loadStats", () => {
     if (topic.status !== "ok") throw new Error();
     await addWordsToTopic(db, topic.id, [eat]);
 
-    // 2 ngày trước: ôn thẻ reading của 食べる sai; hôm nay: đúng.
-    const [reading] = await loadSession(db, DEFAULT_SETTINGS, daysAgo(2));
-    const graded = await submitReview(db, reading, Rating.Again, "たべた", false, daysAgo(2));
-    await submitReview(db, graded, Rating.Good, "たべる", true, NOW);
+    // 2 ngày trước: quên 食べる; hôm nay: nhớ.
+    const [item] = await loadMainRound(db, DEFAULT_SETTINGS, daysAgo(2));
+    expect(item.term).toBe("食べる");
+    const graded = await submitReview(db, item, Rating.Again, false, daysAgo(2));
+    await submitReview(db, graded, Rating.Good, true, NOW);
 
     // 見る đủ vững.
     await db.execute("UPDATE cards SET stability = 30, state = 2, due = ? WHERE word_id = ?", [daysAgo(-30).toISOString(), see]);

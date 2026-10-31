@@ -2,14 +2,15 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { Db } from "../db/db";
 import {
   LEVELS,
-  MAX_REVIEWS_MAX,
+  SESSION_SIZE_MAX,
+  SESSION_SIZE_MIN,
   NEW_PER_DAY_MAX,
   loadSettings,
   saveSettings,
   type Settings,
 } from "../settings/settings";
 
-type Form = { level: string; newPerDay: string; maxReviewsPerSession: string; gradeButtons: "2" | "4" };
+type Form = { level: string; newPerDay: string; sessionSize: string; gradeButtons: "2" | "4" };
 
 export default function SettingsTab({ db }: { db: Db }) {
   const [form, setForm] = useState<Form | null>(null);
@@ -37,7 +38,7 @@ export default function SettingsTab({ db }: { db: Db }) {
       const result = await saveSettings(db, {
         level: form.level,
         newPerDay: Number(form.newPerDay),
-        maxReviewsPerSession: Number(form.maxReviewsPerSession),
+        sessionSize: Number(form.sessionSize),
         gradeButtons: form.gradeButtons === "4" ? 4 : 2,
       });
       setMessage(result.ok ? { kind: "ok", text: "Đã lưu. Áp dụng từ phiên ôn tiếp theo." } : { kind: "error", text: result.message });
@@ -61,17 +62,17 @@ export default function SettingsTab({ db }: { db: Db }) {
           </select>
         </label>
         <label className="field">
-          <span>Số từ mới mỗi ngày (0–{NEW_PER_DAY_MAX}, mỗi từ 2 thẻ)</span>
+          <span>Số từ mới mỗi ngày (0–{NEW_PER_DAY_MAX})</span>
           <input type="number" min={0} max={NEW_PER_DAY_MAX} value={form.newPerDay} onChange={set("newPerDay")} />
         </label>
         <label className="field">
-          <span>Số thẻ ôn tối đa mỗi phiên (1–{MAX_REVIEWS_MAX})</span>
+          <span>Số thẻ mỗi lượt ôn ({SESSION_SIZE_MIN}–{SESSION_SIZE_MAX})</span>
           <input
             type="number"
-            min={1}
-            max={MAX_REVIEWS_MAX}
-            value={form.maxReviewsPerSession}
-            onChange={set("maxReviewsPerSession")}
+            min={SESSION_SIZE_MIN}
+            max={SESSION_SIZE_MAX}
+            value={form.sessionSize}
+            onChange={set("sessionSize")}
           />
         </label>
         <div className="field">
@@ -100,7 +101,7 @@ function toForm(s: Settings): Form {
   return {
     level: s.level,
     newPerDay: String(s.newPerDay),
-    maxReviewsPerSession: String(s.maxReviewsPerSession),
+    sessionSize: String(s.sessionSize),
     gradeButtons: s.gradeButtons === 4 ? "4" : "2",
   };
 }

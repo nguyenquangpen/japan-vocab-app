@@ -48,7 +48,7 @@ Không thêm tính năng ngoài design.md nếu tôi chưa đồng ý. Nếu th�
 
 - Chạy app khi phát triển: `npm run tauri dev`
 - Build bản cài: `npm run tauri build` (chỉ build exe, không đóng gói: `npx tauri build --no-bundle`)
-- Test: `npm test` (Vitest, DB thật trong bộ nhớ qua `node:sqlite`)
+- Test: `npm test` (Vitest, DB thật trong bộ nhớ qua `node:sqlite`; test giao diện `*.test.tsx` chạy trong jsdom)
 - Kiểm tra kiểu: `npm run typecheck`
 - Lint: `npm run lint`
 

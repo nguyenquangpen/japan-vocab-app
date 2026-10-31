@@ -304,6 +304,75 @@ function WordTopics({ db, wordId, topics, onChanged }: { db: Db; wordId: number;
   );
 }
 
+interface ExampleDraft {
+  /** Khóa React cục bộ, không phải id trong DB (ví dụ được thay toàn bộ khi lưu). */
+  key: number;
+  ja: string;
+  reading: string;
+  vi: string;
+}
+
+let nextExampleKey = 1;
+
+/** Sửa danh sách ví dụ: mỗi ví dụ 3 ô (câu tiếng Nhật, cách đọc, nghĩa), thêm/xóa. Lưu cùng nút Lưu của từ. */
+function ExamplesEditor({ examples, onChange }: { examples: ExampleDraft[]; onChange: (next: ExampleDraft[]) => void }) {
+  const update = (key: number, field: "ja" | "reading" | "vi", value: string) =>
+    onChange(examples.map((e) => (e.key === key ? { ...e, [field]: value } : e)));
+
+  return (
+    <div className="field">
+      <span>Ví dụ</span>
+      {examples.length === 0 && <p className="muted small">Chưa có ví dụ.</p>}
+      <div className="stack examples-editor">
+        {examples.map((e, i) => (
+          <div key={e.key} className="example-row">
+            <span className="example-index muted small">{i + 1}</span>
+            <div className="stack grow">
+              <input
+                className="jp"
+                value={e.ja}
+                onChange={(ev) => update(e.key, "ja", ev.target.value)}
+                placeholder="Câu tiếng Nhật (vd: 猫が好きです。)"
+                aria-label={`Ví dụ ${i + 1}: câu tiếng Nhật`}
+              />
+              <input
+                className="jp"
+                value={e.reading}
+                onChange={(ev) => update(e.key, "reading", ev.target.value)}
+                placeholder="Cách đọc (tùy chọn)"
+                aria-label={`Ví dụ ${i + 1}: cách đọc`}
+              />
+              <input
+                value={e.vi}
+                onChange={(ev) => update(e.key, "vi", ev.target.value)}
+                placeholder="Nghĩa tiếng Việt"
+                aria-label={`Ví dụ ${i + 1}: nghĩa`}
+              />
+            </div>
+            <button
+              type="button"
+              className="example-remove"
+              onClick={() => onChange(examples.filter((x) => x.key !== e.key))}
+              aria-label={`Xóa ví dụ ${i + 1}`}
+            >
+              Xóa
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="row">
+        <button
+          type="button"
+          onClick={() => onChange([...examples, { key: nextExampleKey++, ja: "", reading: "", vi: "" }])}
+        >
+          + Thêm ví dụ
+        </button>
+        <span className="muted small">Bấm Lưu bên dưới để lưu thay đổi.</span>
+      </div>
+    </div>
+  );
+}
+
 interface EditorProps {
   db: Db;
   wordId: number;
@@ -326,6 +395,7 @@ function WordEditor({ db, wordId, topics, onSaved, onDeleted, onOpenWord }: Edit
     usageNote: "",
     userNote: "",
   });
+  const [examples, setExamples] = useState<ExampleDraft[]>([]);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string; duplicateId?: number } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [loadVersion, setLoadVersion] = useState(0);
@@ -349,6 +419,9 @@ function WordEditor({ db, wordId, topics, onSaved, onDeleted, onOpenWord }: Edit
           userNote: word.userNote ?? "",
           meaningDetail: word.meaningDetail ?? "",
         });
+        setExamples(
+          word.examples.map((e) => ({ key: nextExampleKey++, ja: e.ja, reading: e.reading ?? "", vi: e.vi ?? "" })),
+        );
       })
       .catch((e: unknown) => !cancelled && setLoad({ kind: "error", message: String(e) }));
     return () => {
@@ -367,7 +440,11 @@ function WordEditor({ db, wordId, topics, onSaved, onDeleted, onOpenWord }: Edit
   async function save(event: FormEvent) {
     event.preventDefault();
     try {
-      const result = await updateWord(db, wordId, { ...form, meanings: form.meanings.split("\n") });
+      const result = await updateWord(db, wordId, {
+        ...form,
+        meanings: form.meanings.split("\n"),
+        examples: examples.map(({ ja, reading, vi }) => ({ ja, reading, vi })),
+      });
       if (result.status === "updated") {
         setMessage({ kind: "ok", text: "Đã lưu." });
         setLoadVersion((v) => v + 1);
@@ -441,20 +518,7 @@ function WordEditor({ db, wordId, topics, onSaved, onDeleted, onOpenWord }: Edit
 
       <WordTopics db={db} wordId={wordId} topics={topics} onChanged={onSaved} />
 
-      {word.examples.length > 0 && (
-        <div className="field">
-          <span>Ví dụ</span>
-          <ul>
-            {word.examples.map((ex) => (
-              <li key={ex.id}>
-                <span className="jp">{ex.ja}</span>
-                {ex.reading && <span className="jp muted"> ({ex.reading})</span>}
-                {ex.vi && <div className="muted">{ex.vi}</div>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ExamplesEditor examples={examples} onChange={setExamples} />
       {word.confusables.length > 0 && (
         <div className="field">
           <span>Từ dễ nhầm</span>

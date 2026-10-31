@@ -1,14 +1,12 @@
 import { State, createEmptyCard, fsrs, generatorParameters, type Card, type Grade } from "ts-fsrs";
 import { toKana } from "wanakana";
 
-// Phần thuần của ôn tập: lịch FSRS, chấm cách đọc. Không đụng DB.
+// Phần thuần của ôn tập: lịch FSRS, đổi romaji sang kana. Không đụng DB.
 
 export { Rating, State } from "ts-fsrs";
 export type { Grade } from "ts-fsrs";
 
-export type Skill = "meaning" | "reading";
-
-/** Từ được coi là "vững" khi mọi thẻ có stability >= ngưỡng này (ngày). */
+/** Từ được coi là "vững" khi thẻ meaning có stability >= ngưỡng này (ngày). */
 export const MASTERED_STABILITY = 21;
 
 /** Trạng thái thẻ đúng như cột trong bảng cards (thời gian dạng ISO UTC). */
@@ -25,7 +23,9 @@ export interface CardState {
   lastReview: string | null;
 }
 
-const scheduler = fsrs(generatorParameters({ request_retention: 0.9, enable_fuzz: true }));
+// Tắt bước học ngắn (1 phút / 10 phút): mỗi lần chấm hẹn theo ngày (Quên ≈ 1 ngày, Nhớ ≈ 3 ngày với thẻ mới),
+// nên thẻ đã kéo Nhớ không quay lại ngay. Từ vừa quên được luyện lại bằng lượt luyện thêm, không qua lịch.
+const scheduler = fsrs(generatorParameters({ request_retention: 0.9, enable_fuzz: true, enable_short_term: false }));
 
 export function newCardState(now: Date): CardState {
   return fromFsrs(createEmptyCard(now));
@@ -35,20 +35,10 @@ export function gradeCard(card: CardState, rating: Grade, now: Date): CardState 
   return fromFsrs(scheduler.next(toFsrs(card), now, rating).card);
 }
 
-/**
- * Chuẩn hóa để so cách đọc: NFKC, bỏ khoảng trắng, katakana → hiragana.
- * Giữ nguyên ー để こーひー khớp với コーヒー.
- */
-export function normalizeKana(value: string): string {
-  return value
-    .normalize("NFKC")
-    .replace(/\s+/g, "")
-    .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
-}
-
-export function isReadingCorrect(answer: string, expected: string): boolean {
-  const a = normalizeKana(toKana(answer));
-  return a !== "" && a === normalizeKana(expected);
+/** Xác suất còn nhớ thẻ lúc `now` (0–1). Thẻ mới coi như 0. */
+export function retrievability(card: CardState, now: Date): number {
+  if (card.state === State.New) return 0;
+  return scheduler.get_retrievability(toFsrs(card), now, false);
 }
 
 /** Đổi hết romaji còn sót sang kana (kể cả `n` cuối). Kana và chữ Hán giữ nguyên. */

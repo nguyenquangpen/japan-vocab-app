@@ -224,6 +224,66 @@ button.danger:not(:disabled):hover {
     var(--surface);
 }
 
+/* Kéo thẻ: trái = Quên, phải = Nhớ. Transform đặt trên lớp ngoài để không đè transform lật của .flip-card. */
+.swipe-card {
+  position: relative;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transition:
+    transform 0.25s var(--ease),
+    opacity 0.25s;
+}
+
+.swipe-card.dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.swipe-card.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.swipe-card .flip-card,
+.swipe-card .flip-card.flipped {
+  cursor: inherit;
+}
+
+.swipe-card .flip-card:not(.flipped):hover {
+  transform: none;
+}
+
+.swipe-stamp {
+  position: absolute;
+  top: 22px;
+  z-index: 2;
+  padding: 4px 14px;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  border: 3px solid currentColor;
+  border-radius: 10px;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+.swipe-stamp.forgot {
+  right: 22px;
+  color: var(--bad);
+  transform: rotate(12deg);
+}
+
+.swipe-stamp.remembered {
+  left: 22px;
+  color: var(--good);
+  transform: rotate(-12deg);
+}
+
+.swipe-hint {
+  text-align: center;
+}
+
 .flip-hint {
   margin-top: 8px;
   font-size: 0.8rem;
@@ -324,34 +384,7 @@ button.danger:not(:disabled):hover {
   border-color: var(--accent);
 }
 
-/* Ô gõ cách đọc */
-.review-input {
-  border-width: 2px;
-  border-radius: 12px;
-  transition:
-    border-color 0.2s,
-    background-color 0.2s;
-}
-
-.review-input.is-correct {
-  color: var(--good);
-  background: var(--good-soft);
-  border-color: var(--good);
-  animation: pop 0.35s var(--ease);
-}
-
-.review-input.is-wrong {
-  color: var(--bad);
-  background: var(--bad-soft);
-  border-color: var(--bad);
-  animation: shake 0.4s;
-}
-
-.verdict {
-  font-weight: 600;
-  animation: fade-in 0.25s var(--ease);
-}
-
+/* pop/shake dùng cho đáp án quiz */
 @keyframes pop {
   40% {
     transform: scale(1.06);
@@ -549,6 +582,61 @@ button.danger:not(:disabled):hover {
   border-radius: 10px;
 }
 
+/* Sửa ví dụ trong form sửa từ */
+.examples-editor {
+  gap: 8px;
+}
+
+.example-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  background: #fafbff;
+  border: 1px solid #e3e6ef;
+  border-radius: 10px;
+}
+
+.example-row .stack {
+  gap: 6px;
+}
+
+.example-index {
+  min-width: 18px;
+  padding-top: 8px;
+  font-weight: 700;
+}
+
+.example-remove:not(:disabled):hover {
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-color: var(--bad);
+}
+
+/* Ví dụ trên mặt sau flashcard: câu chữ Hán, cách đọc kana nhỏ hơn, nghĩa */
+.card-example {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 480px;
+  padding: 8px 12px;
+  border-top: 1px dashed #e3e6ef;
+}
+
+.example-ja {
+  font-size: 1.05rem;
+}
+
+.example-reading {
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.example-vi {
+  font-size: 0.9rem;
+}
+
 /* Nghĩa mở rộng trên flashcard */
 .meaning-detail {
   max-width: 480px;
@@ -727,6 +815,151 @@ button.danger:not(:disabled):hover {
 
 .stats-table th:not(:first-child) {
   text-align: right;
+}
+
+/* Màn chọn phạm vi ôn */
+.review-setup {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.scope-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scope-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.scope-option.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.setup-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.setup-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  text-align: left;
+  border-width: 2px;
+  border-radius: 14px;
+}
+
+.setup-action span {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.setup-action:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.scope-badge {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Lượt ôn: tiêu đề, số đếm trên nút */
+.round-head {
+  justify-content: space-between;
+}
+
+.round-title {
+  font-weight: 700;
+}
+
+/* Số từ đã bấm nút này trong lượt, dạng viên thuốc viền cùng màu nút. */
+.grade-count {
+  min-width: 26px;
+  padding: 0 8px;
+  margin-left: 2px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.grade-button:not(:disabled):hover .grade-count {
+  background: #fff;
+}
+
+/* Hết lượt */
+.cheer {
+  font-size: 1.1rem;
+  animation: fade-in 0.5s var(--ease) 0.15s both;
+}
+
+.next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.next-actions button {
+  padding: 10px 16px;
+  border-radius: 10px;
+}
+
+.all-done {
+  text-align: center;
+  background:
+    radial-gradient(500px 160px at 50% 0%, #fdf0f4 0%, transparent 70%),
+    var(--surface);
+  animation: pop 0.5s var(--ease);
+}
+
+/* Pháo giấy chúc mừng */
+.confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -20px;
+  opacity: 0;
+  animation-name: confetti-fall;
+  animation-timing-function: cubic-bezier(0.25, 0.6, 0.5, 1);
+  animation-fill-mode: forwards;
+}
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift), 105vh) rotate(var(--spin));
+  }
 }
 
 /* Tôn trọng cài đặt giảm chuyển động của Windows. */
