@@ -4,7 +4,6 @@ import {
   State,
   gradeCard,
   newCardState,
-  retrievability,
   romajiToKana,
   romajiToKanaWhileTyping,
 } from "./scheduler";
@@ -38,13 +37,6 @@ describe("gradeCard (không có bước học ngắn)", () => {
     const lapsed = gradeCard(second, Rating.Again, new Date(second.due));
     expect(lapsed.lapses).toBe(1);
     expect(lapsed.stability).toBeLessThan(second.stability);
-  });
-
-  it("khả năng nhớ: thẻ mới 0, vừa ôn ≈ 1, càng lâu càng giảm", () => {
-    const card = gradeCard(newCardState(NOW), Rating.Good, NOW);
-    expect(retrievability(newCardState(NOW), NOW)).toBe(0);
-    expect(retrievability(card, NOW)).toBeCloseTo(1, 2);
-    expect(retrievability(card, new Date(NOW.getTime() + 30 * DAY * 60_000))).toBeLessThan(0.9);
   });
 });
 

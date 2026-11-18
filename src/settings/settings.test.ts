@@ -6,7 +6,7 @@ describe("saveSettings", () => {
   it("lưu rồi đọc lại được, kể cả khi key đã bị xóa", async () => {
     const db = createTestDb();
     await db.execute("DELETE FROM settings WHERE key = ?", ["grade_buttons"]);
-    const next = { level: "N3", newPerDay: 0, sessionSize: 50, gradeButtons: 4 as const };
+    const next = { level: "N3", newPerDay: 0, sessionSize: 50, gradeButtons: 4 as const, mascot: "fox" as const };
     expect(await saveSettings(db, next)).toEqual({ ok: true });
     expect(await loadSettings(db)).toEqual(next);
   });
@@ -20,6 +20,7 @@ describe("saveSettings", () => {
       { ...DEFAULT_SETTINGS, sessionSize: 4 },
       { ...DEFAULT_SETTINGS, sessionSize: 51 },
       { ...DEFAULT_SETTINGS, gradeButtons: 3 as unknown as 2 },
+      { ...DEFAULT_SETTINGS, mascot: "dragon" as unknown as "cat" },
     ];
     for (const settings of bad) expect(await saveSettings(db, settings)).toMatchObject({ ok: false });
     expect(await loadSettings(db)).toEqual(DEFAULT_SETTINGS);
@@ -37,6 +38,7 @@ describe("loadSettings", () => {
     await db.execute("UPDATE settings SET value = ? WHERE key = ?", ["N3", "level"]);
     await db.execute("DELETE FROM settings WHERE key = ?", ["grade_buttons"]);
     await db.execute("INSERT INTO settings (key, value) VALUES (?, ?)", ["session_size", "999"]);
+    await db.execute("INSERT INTO settings (key, value) VALUES (?, ?)", ["mascot", "dragon"]);
     expect(await loadSettings(db)).toEqual({ ...DEFAULT_SETTINGS, level: "N3" });
   });
 });

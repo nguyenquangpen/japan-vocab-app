@@ -35,12 +35,6 @@ export function gradeCard(card: CardState, rating: Grade, now: Date): CardState 
   return fromFsrs(scheduler.next(toFsrs(card), now, rating).card);
 }
 
-/** Xác suất còn nhớ thẻ lúc `now` (0–1). Thẻ mới coi như 0. */
-export function retrievability(card: CardState, now: Date): number {
-  if (card.state === State.New) return 0;
-  return scheduler.get_retrievability(toFsrs(card), now, false);
-}
-
 /** Đổi hết romaji còn sót sang kana (kể cả `n` cuối). Kana và chữ Hán giữ nguyên. */
 export function romajiToKana(value: string): string {
   return toKana(value);

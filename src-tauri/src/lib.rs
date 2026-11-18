@@ -1,3 +1,5 @@
+mod hub;
+
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -27,6 +29,18 @@ pub fn run() {
             sql: include_str!("../migrations/0004_meaning_detail.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "practice_items",
+            sql: include_str!("../migrations/0005_practice_items.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 6,
+            description: "hub_outbox",
+            sql: include_str!("../migrations/0006_hub_outbox.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -36,6 +50,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_clipboard_manager::init())
+        .invoke_handler(tauri::generate_handler![hub::hub_post])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

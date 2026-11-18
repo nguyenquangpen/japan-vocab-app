@@ -1,4 +1,5 @@
 import type { Db } from "../db/db";
+import { DEFAULT_MASCOT, isMascotId, type MascotId } from "../mascot/mascot";
 
 export interface Settings {
   level: string;
@@ -6,6 +7,8 @@ export interface Settings {
   /** Số thẻ mỗi lượt ôn (key `session_size`; key cũ `max_reviews_per_session` không còn dùng). */
   sessionSize: number;
   gradeButtons: 2 | 4;
+  /** Linh vật hiện khi kết thúc lượt ôn (key `mascot`). */
+  mascot: MascotId;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -13,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   newPerDay: 10,
   sessionSize: 15,
   gradeButtons: 2,
+  mascot: DEFAULT_MASCOT,
 };
 
 export const LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
@@ -24,7 +28,7 @@ export type SaveResult = { ok: true } | { ok: false; message: string };
 
 /** Kiểm tra rồi ghi toàn bộ settings bằng 1 câu lệnh. */
 export async function saveSettings(db: Db, settings: Settings): Promise<SaveResult> {
-  const { level, newPerDay, sessionSize, gradeButtons } = settings;
+  const { level, newPerDay, sessionSize, gradeButtons, mascot } = settings;
   if (!(LEVELS as readonly string[]).includes(level)) return { ok: false, message: "Trình độ không hợp lệ." };
   if (!Number.isInteger(newPerDay) || newPerDay < 0 || newPerDay > NEW_PER_DAY_MAX) {
     return { ok: false, message: `Số từ mới mỗi ngày phải là số nguyên từ 0 đến ${NEW_PER_DAY_MAX}.` };
@@ -36,15 +40,17 @@ export async function saveSettings(db: Db, settings: Settings): Promise<SaveResu
     };
   }
   if (gradeButtons !== 2 && gradeButtons !== 4) return { ok: false, message: "Kiểu nút chấm phải là 2 hoặc 4." };
+  if (!isMascotId(mascot)) return { ok: false, message: "Linh vật không hợp lệ." };
 
   await db.execute(
-    `INSERT INTO settings (key, value) VALUES (?, ?), (?, ?), (?, ?), (?, ?)
+    `INSERT INTO settings (key, value) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)
      ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
     [
       "level", level,
       "new_per_day", String(newPerDay),
       "session_size", String(sessionSize),
       "grade_buttons", String(gradeButtons),
+      "mascot", mascot,
     ],
   );
   return { ok: true };
@@ -58,10 +64,12 @@ export async function loadSettings(db: Db): Promise<Settings> {
     const n = Number.parseInt(raw.get(key) ?? "", 10);
     return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
   };
+  const mascotRaw = raw.get("mascot");
   return {
     level: raw.get("level")?.trim() || DEFAULT_SETTINGS.level,
     newPerDay: int("new_per_day", DEFAULT_SETTINGS.newPerDay),
     sessionSize: int("session_size", DEFAULT_SETTINGS.sessionSize, SESSION_SIZE_MIN, SESSION_SIZE_MAX),
     gradeButtons: raw.get("grade_buttons") === "4" ? 4 : 2,
+    mascot: isMascotId(mascotRaw) ? mascotRaw : DEFAULT_SETTINGS.mascot,
   };
 }

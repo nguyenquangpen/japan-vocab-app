@@ -1,6 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { Db } from "../db/db";
+import type { HubSender } from "../hub/sender";
+import { MASCOTS, isMascotId } from "../mascot/mascot";
+import HubSettings from "./HubSettings";
 import {
+  DEFAULT_SETTINGS,
   LEVELS,
   SESSION_SIZE_MAX,
   SESSION_SIZE_MIN,
@@ -10,9 +14,9 @@ import {
   type Settings,
 } from "../settings/settings";
 
-type Form = { level: string; newPerDay: string; sessionSize: string; gradeButtons: "2" | "4" };
+type Form = { level: string; newPerDay: string; sessionSize: string; gradeButtons: "2" | "4"; mascot: string };
 
-export default function SettingsTab({ db }: { db: Db }) {
+export default function SettingsTab({ db, hub = null }: { db: Db; hub?: HubSender | null }) {
   const [form, setForm] = useState<Form | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
@@ -40,6 +44,7 @@ export default function SettingsTab({ db }: { db: Db }) {
         newPerDay: Number(form.newPerDay),
         sessionSize: Number(form.sessionSize),
         gradeButtons: form.gradeButtons === "4" ? 4 : 2,
+        mascot: isMascotId(form.mascot) ? form.mascot : DEFAULT_SETTINGS.mascot,
       });
       setMessage(result.ok ? { kind: "ok", text: "Đã lưu. Áp dụng từ phiên ôn tiếp theo." } : { kind: "error", text: result.message });
     } catch (e) {
@@ -86,6 +91,20 @@ export default function SettingsTab({ db }: { db: Db }) {
             4 nút: Quên / Khó / Nhớ / Dễ
           </label>
         </div>
+        <div className="field">
+          <span>Linh vật (hiện khi xong mỗi lượt ôn)</span>
+          <div className="mascot-picker">
+            {MASCOTS.map((m) => (
+              <label key={m.id} className={`mascot-option${form.mascot === m.id ? " selected" : ""}`}>
+                <input type="radio" name="mascot" value={m.id} checked={form.mascot === m.id} onChange={set("mascot")} />
+                <span className="mascot-option-emoji" aria-hidden="true">
+                  {m.emoji}
+                </span>
+                <span className="mascot-option-name">{m.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
         <div className="row">
           <button type="submit" className="primary">
             Lưu
@@ -93,6 +112,7 @@ export default function SettingsTab({ db }: { db: Db }) {
           {message && <span className={message.kind === "ok" ? "success" : "error"}>{message.text}</span>}
         </div>
       </form>
+      <HubSettings db={db} sender={hub ?? undefined} />
     </section>
   );
 }
@@ -103,5 +123,6 @@ function toForm(s: Settings): Form {
     newPerDay: String(s.newPerDay),
     sessionSize: String(s.sessionSize),
     gradeButtons: s.gradeButtons === 4 ? "4" : "2",
+    mascot: s.mascot,
   };
 }

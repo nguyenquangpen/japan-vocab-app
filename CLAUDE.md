@@ -26,6 +26,7 @@ Không thêm tính năng ngoài design.md nếu tôi chưa đồng ý. Nếu th�
 ## Quy tắc an toàn (bắt buộc)
 
 - Không mở cổng mạng, không chạy server local, không gọi mạng ra ngoài.
+  - **Ngoại lệ duy nhất (đã đồng ý 2026-11-18):** tích hợp Personal Productivity Hub (`docs/2026-11-07-japanese-app-integration.md`). Chỉ lệnh Rust `hub_post` được gửi `POST http://127.0.0.1:<port>/api/v1/integrations/events`; chặn mọi host khác, không theo redirect, không dùng proxy. Không bật plugin http, không nới CSP (giao diện vẫn không gọi mạng được). API key lưu trong bảng settings, không bao giờ ghi vào log / thông báo lỗi / git.
 - Chỉ bật đúng các Tauri plugin/permission cần thiết (sql, clipboard). Không bật shell, http, fs rộng.
 - Đặt CSP chặt trong `tauri.conf.json`.
 - Mọi nội dung dán vào (từ ChatGPT) là dữ liệu không tin cậy: parse qua schema `zod`, hiển thị dạng text thuần. Cấm `innerHTML`, `dangerouslySetInnerHTML`, `eval`, `new Function`.

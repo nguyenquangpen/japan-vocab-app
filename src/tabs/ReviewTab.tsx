@@ -8,39 +8,50 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { Db } from "../db/db";
+import { reportNewlyMastered, reportSessionCompleted } from "../hub/events";
+import type { HubSender } from "../hub/sender";
 import { buildMistakesPrompt } from "../review/mistakesPrompt";
+import { countUnseenOldWords, pickOldWords } from "../review/oldWordsMemory";
 import {
   ALL_WORDS,
   getReviewOverview,
-  loadPracticePool,
-  loadMainRound,
   loadNewRound,
-  pickPractice,
+  loadPracticePool,
+  loadTodayRound,
   shuffle,
   submitReview,
+  wordStatus,
   type ReviewItem,
   type ReviewOverview,
   type ReviewScope,
+  type WordStatus,
 } from "../review/review";
-import { listTopics, type Topic } from "../topics/topics";
-import { Rating, State, type Grade } from "../review/scheduler";
+import { Rating, type Grade } from "../review/scheduler";
 import { loadSettings, type Settings } from "../settings/settings";
+import { listTopics, type Topic } from "../topics/topics";
+import MascotToast from "./MascotToast";
 
 interface Props {
   db: Db;
+  /** Bộ gửi sự kiện sang Hub (null nếu chưa sẵn sàng / trong test). */
+  hub?: HubSender | null;
 }
 
 /**
- * main/new: chấm qua FSRS (ghi DB). Còn lại là luyện thêm, không ghi DB.
- * forgotten: từ vừa quên · recent: từ của lượt vừa học · mix: lượt vừa học + từ cũ
- * random: ngẫu nhiên có trọng số · all: luyện lại toàn bộ vốn từ theo từng lượt.
+ * today: Ôn hôm nay (đến hạn → từ mới, mới nhất trước) — mở app là chạy, tính vào lịch.
+ * new: Học thêm từ mới (mới nhất trước) — tính vào lịch.
+ * forgotten: Ôn lại từ vừa quên · old: Ôn từ vựng cũ (ngẫu nhiên trong từ đã học)
+ * free: Luyện tự do theo phạm vi (đi hết phạm vi theo từng lượt). Ba kiểu này không đổi lịch.
  */
-type RoundKind = "main" | "new" | "forgotten" | "recent" | "mix" | "random" | "all";
+type RoundKind = "today" | "new" | "forgotten" | "old" | "free";
 
 interface Round {
   id: number;
   kind: RoundKind;
   items: ReviewItem[];
+  /** Mã phiên ổn định (gửi Hub làm subject.external_id) và lúc bắt đầu. */
+  sessionId: string;
+  startedAt: Date;
 }
 
 interface Result {
@@ -51,9 +62,9 @@ interface Result {
 type Stage =
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "setup" }
+  | { kind: "options" }
   | { kind: "playing"; round: Round; results: Result[] }
-  | { kind: "summary"; round: Round | null; results: Result[]; overview: ReviewOverview };
+  | { kind: "summary"; round: Round | null; results: Result[]; overview: ReviewOverview; oldLeft: number };
 
 /** Phạm vi ôn đã chọn + nhãn để hiển thị. */
 interface ScopeChoice {
@@ -64,23 +75,25 @@ interface ScopeChoice {
 const ALL_SCOPE: ScopeChoice = { scope: ALL_WORDS, label: "Tất cả từ" };
 
 const GRADED: Record<RoundKind, boolean> = {
-  main: true,
+  today: true,
   new: true,
   forgotten: false,
-  recent: false,
-  mix: false,
-  random: false,
-  all: false,
+  old: false,
+  free: false,
 };
 
 const ROUND_TITLE: Record<RoundKind, string> = {
-  main: "Lượt ôn theo lịch",
-  new: "Học thêm từ mới",
+  today: "Ôn hôm nay",
+  new: "Học từ mới",
   forgotten: "Ôn lại từ vừa quên",
-  recent: "Ôn lại từ vừa học",
-  mix: "Từ vừa học + từ cũ",
-  random: "Luyện ngẫu nhiên",
-  all: "Luyện lại toàn bộ",
+  old: "Ôn từ vựng cũ",
+  free: "Luyện tự do",
+};
+
+const STATUS_BADGE: Record<WordStatus, { text: string; className: string }> = {
+  new: { text: "🆕 Mới", className: "status-new" },
+  learning: { text: "📖 Đang học", className: "status-learning" },
+  mastered: { text: "✅ Vững", className: "status-mastered" },
 };
 
 const GRADES: Record<2 | 4, { rating: Grade; label: string }[]> = {
@@ -101,38 +114,91 @@ const SWIPE_THRESHOLD = 110;
 /** Thời gian thẻ bay ra khỏi màn hình trước khi chấm (ms). */
 const FLY_MS = 250;
 
-export default function ReviewTab({ db }: Props) {
+export default function ReviewTab({ db, hub = null }: Props) {
   const [stage, setStage] = useState<Stage>({ kind: "loading" });
   const [settings, setSettings] = useState<Settings | null>(null);
   const [choice, setChoice] = useState<ScopeChoice>(ALL_SCOPE);
+  const [includeMastered, setIncludeMastered] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const roundId = useRef(0);
-  // Phần còn lại của "Luyện toàn bộ" (đi qua hết phạm vi theo từng lượt).
-  const [allQueue, setAllQueue] = useState<ReviewItem[]>([]);
+  // Phần còn lại của "Luyện tự do" (đi hết phạm vi theo từng lượt).
+  const [freeQueue, setFreeQueue] = useState<ReviewItem[]>([]);
   const busy = useRef(false);
 
   const showSummary = useCallback(
     async (round: Round | null, results: Result[], s: Settings, scope: ReviewScope) => {
       const overview = await getReviewOverview(db, s, new Date(), scope);
-      setStage({ kind: "summary", round, results, overview });
+      // Từ cũ (đã học) trong phạm vi chưa gặp ở "Ôn từ vựng cũ" của lần mở app này.
+      const learned = await loadPracticePool(db, { scope, learnedOnly: true });
+      setStage({ kind: "summary", round, results, overview, oldLeft: countUnseenOldWords(scope, learned) });
     },
     [db],
   );
 
-  // Mở tab: chọn phạm vi và cách ôn trước, chưa vào ôn ngay.
+  /**
+   * Bắt đầu 1 lượt. Tùy chọn (`sc`, `mastered`) và phần còn lại của Luyện tự do (`pendingFree`)
+   * truyền qua tham số để hàm không phụ thuộc state.
+   */
+  const choose = useCallback(
+    async (
+      kind: RoundKind,
+      s: Settings,
+      prev: { round: Round | null; results: Result[] } | null,
+      sc: ScopeChoice,
+      mastered: boolean,
+      pendingFree: ReviewItem[] = [],
+    ) => {
+      const size = s.sessionSize;
+      const forgotten = (prev?.results ?? []).filter((r) => r.rating === Rating.Again).map((r) => r.item);
+      const start = async (items: ReviewItem[]) => {
+        if (items.length === 0) return void (await showSummary(null, [], s, sc.scope));
+        roundId.current += 1;
+        setStage({
+          kind: "playing",
+          round: { id: roundId.current, kind, items, sessionId: crypto.randomUUID(), startedAt: new Date() },
+          results: [],
+        });
+      };
+      try {
+        setChoice(sc);
+        setIncludeMastered(mastered);
+        setStage({ kind: "loading" });
+        if (kind === "today") return void (await start(await loadTodayRound(db, s, new Date(), sc.scope)));
+        if (kind === "new") return void (await start(await loadNewRound(db, s, new Date(), sc.scope)));
+        if (kind === "forgotten") return void (await start(shuffle(forgotten)));
+        if (kind === "old") {
+          // Chỉ bốc từ cũ chưa gặp trong lần mở app này, thứ tự xáo trộn (xem oldWordsMemory).
+          const pool = await loadPracticePool(db, { scope: sc.scope, learnedOnly: true });
+          return void (await start(pickOldWords(sc.scope, pool, size).items));
+        }
+        // free: lượt đầu xáo cả phạm vi; các lượt sau đi tiếp phần còn lại.
+        let queue = prev?.round?.kind === "free" ? pendingFree : [];
+        if (queue.length === 0) {
+          queue = shuffle(await loadPracticePool(db, { scope: sc.scope, includeMastered: mastered }));
+        }
+        setFreeQueue(queue.slice(size));
+        await start(queue.slice(0, size));
+      } catch (e) {
+        setStage({ kind: "error", message: String(e) });
+      }
+    },
+    [db, showSummary],
+  );
+
+  // Mở tab: vào thẳng "Ôn hôm nay" (toàn bộ vốn từ).
   useEffect(() => {
     let cancelled = false;
     loadSettings(db)
       .then((s) => {
         if (cancelled) return;
         setSettings(s);
-        setStage({ kind: "setup" });
+        void choose("today", s, null, ALL_SCOPE, false);
       })
       .catch((e: unknown) => !cancelled && setStage({ kind: "error", message: String(e) }));
     return () => {
       cancelled = true;
     };
-  }, [db]);
+  }, [db, choose]);
 
   async function answer(rating: Grade) {
     if (stage.kind !== "playing" || !settings || busy.current) return;
@@ -141,75 +207,57 @@ export default function ReviewTab({ db }: Props) {
     const item = round.items[results.length];
     try {
       if (GRADED[round.kind]) await submitReview(db, item, rating, rating !== Rating.Again);
-      const next = [...results, { item, rating }];
-      setError(null);
-      if (next.length < round.items.length) setStage({ kind: "playing", round, results: next });
-      else await showSummary(round, next, settings, choice.scope);
     } catch (e) {
+      // Chưa lưu được: ở lại thẻ này để thử lại.
       setError(`Lỗi khi lưu: ${String(e)}`);
-    } finally {
       busy.current = false;
+      return;
     }
-  }
-
-  /** Bắt đầu 1 lượt trong phạm vi `sc` (từ màn chọn phạm vi hoặc màn hết lượt). */
-  async function choose(kind: RoundKind, sc: ScopeChoice = choice) {
-    if (!settings) return;
-    const size = settings.sessionSize;
-    const prev = stage.kind === "summary" ? stage : null;
-    const lastItems = prev?.round?.items ?? [];
-    const forgotten = (prev?.results ?? []).filter((r) => r.rating === Rating.Again).map((r) => r.item);
-    const start = async (items: ReviewItem[]) => {
-      if (items.length === 0) return void (await showSummary(null, [], settings, sc.scope));
-      roundId.current += 1;
-      setStage({ kind: "playing", round: { id: roundId.current, kind, items }, results: [] });
-    };
+    // Đã lưu xong. Từ đây lỗi (vd. khi tải màn tổng kết) không được cho chấm lại thẻ này.
+    const next = [...results, { item, rating }];
+    setError(null);
     try {
-      setChoice(sc);
-      setStage({ kind: "loading" });
-      if (kind === "main") return void (await start(await loadMainRound(db, settings, new Date(), sc.scope)));
-      if (kind === "new") return void (await start(await loadNewRound(db, settings, new Date(), sc.scope)));
-      if (kind === "forgotten") return void (await start(shuffle(forgotten)));
-      if (kind === "recent") return void (await start(shuffle(lastItems)));
-
-      // Mọi từ trong phạm vi, kể cả từ chưa ôn lần nào.
-      const pool = await loadPracticePool(db, new Date(), sc.scope);
-      const now = new Date();
-      const lastIds = new Set(lastItems.map((i) => i.cardId));
-      if (kind === "mix") {
-        // "Từ cũ" = từ đã ôn trước đây, không tính từ chưa ôn và từ của lượt vừa rồi.
-        const older = pool.filter((i) => i.card.state !== State.New && !lastIds.has(i.cardId));
-        return void (await start(shuffle([...lastItems, ...pickPractice(older, Math.ceil(size / 2), now)])));
+      if (next.length < round.items.length) setStage({ kind: "playing", round, results: next });
+      else {
+        void reportRoundToHub(db, hub, round, next.length, GRADED[round.kind], choice);
+        await showSummary(round, next, settings, choice.scope);
       }
-      // Ngẫu nhiên: tránh lặp lại các từ của lượt ngay trước nếu còn đủ từ khác.
-      if (kind === "random") return void (await start(pickPractice(pool, size, now, Math.random, lastIds)));
-      // all: lượt đầu xáo cả phạm vi; các lượt sau đi tiếp phần còn lại.
-      const queue = prev?.round?.kind === "all" && allQueue.length > 0 ? allQueue : shuffle(pool);
-      setAllQueue(queue.slice(size));
-      await start(queue.slice(0, size));
     } catch (e) {
       setStage({ kind: "error", message: String(e) });
+    } finally {
+      busy.current = false;
     }
   }
 
   if (stage.kind === "error") return <p className="error">Lỗi khi tải phiên ôn: {stage.message}</p>;
   if (stage.kind === "loading" || !settings) return <p className="muted">Đang tải phiên ôn…</p>;
 
-  if (stage.kind === "setup") {
-    return <ReviewSetup db={db} settings={settings} initial={choice} onStart={(kind, sc) => void choose(kind, sc)} />;
+  if (stage.kind === "options") {
+    return (
+      <ReviewOptions
+        db={db}
+        settings={settings}
+        initial={choice}
+        initialIncludeMastered={includeMastered}
+        onStart={(kind, sc, mastered) => void choose(kind, settings, null, sc, mastered)}
+        onCancel={() => void choose("today", settings, null, ALL_SCOPE, false)}
+      />
+    );
   }
 
   if (stage.kind === "summary") {
+    const prev = { round: stage.round, results: stage.results };
     return (
       <RoundSummary
         round={stage.round}
         results={stage.results}
         overview={stage.overview}
-        level={settings.level}
+        oldLeft={stage.oldLeft}
+        settings={settings}
         scopeLabel={choice.label}
-        allLeft={stage.round?.kind === "all" ? allQueue.length : 0}
-        onChoose={(kind) => void choose(kind)}
-        onChangeScope={() => setStage({ kind: "setup" })}
+        freeLeft={stage.round?.kind === "free" ? freeQueue.length : 0}
+        onChoose={(kind) => void choose(kind, settings, prev, choice, includeMastered, freeQueue)}
+        onOptions={() => setStage({ kind: "options" })}
       />
     );
   }
@@ -217,13 +265,17 @@ export default function ReviewTab({ db }: Props) {
   const { round, results } = stage;
   const graded = GRADED[round.kind];
   const current = round.items[results.length];
+  const status = STATUS_BADGE[wordStatus(current.card)];
   return (
     <section className="review stack">
       <div className="row round-head">
         <span className="round-title">
           {ROUND_TITLE[round.kind]} <span className="muted small">· {choice.label}</span>
         </span>
-        {!graded && <span className="badge">Luyện thêm · không đổi lịch ôn</span>}
+        <span className="row">
+          <span className={`badge ${status.className}`}>{status.text}</span>
+          {!graded && <span className="badge">Luyện · không đổi lịch</span>}
+        </span>
       </div>
       <SessionProgress done={results.length} total={round.items.length} />
       <Flashcard
@@ -236,6 +288,36 @@ export default function ReviewTab({ db }: Props) {
       {error && <p className="error">{error}</p>}
     </section>
   );
+}
+
+/**
+ * Báo Hub khi xong 1 lượt (chạy nền; lỗi không ảnh hưởng màn ôn):
+ * - learning.session.completed cho mọi lượt (helper tự bỏ lượt < 1 phút).
+ * - vocabulary.learned cho lượt có chấm lịch: các từ lần đầu đạt Vững (mỗi từ báo 1 lần).
+ */
+async function reportRoundToHub(
+  db: Db,
+  hub: HubSender | null,
+  round: Round,
+  itemsReviewed: number,
+  graded: boolean,
+  choice: ScopeChoice,
+): Promise<void> {
+  const endedAt = new Date();
+  try {
+    await reportSessionCompleted(db, { sessionId: round.sessionId, startedAt: round.startedAt, endedAt, itemsReviewed });
+    if (graded) {
+      await reportNewlyMastered(db, {
+        sessionId: round.sessionId,
+        wordIds: round.items.map((i) => i.wordId),
+        occurredAt: endedAt,
+        deck: choice.scope.kind === "topics" ? choice.label : undefined,
+      });
+    }
+    await hub?.kick();
+  } catch {
+    // Outbox là phụ: không chặn việc học nếu ghi sự kiện lỗi.
+  }
 }
 
 function countByRating(results: Result[]): Map<Grade, number> {
@@ -262,14 +344,22 @@ function Flashcard({ item, grades, counts, onAnswer }: FlashcardProps) {
   const [dragging, setDragging] = useState(false);
   const [leaving, setLeaving] = useState<"left" | "right" | null>(null);
   const drag = useRef<{ startX: number; moved: boolean } | null>(null);
+  // Khóa: thẻ chỉ được chấm 1 lần (kể cả khi đang bay ra mà bấm thêm phím số).
   const answered = useRef(false);
+  const flyTimer = useRef<number | null>(null);
 
-  const submit = useCallback(
+  useEffect(
+    () => () => {
+      if (flyTimer.current !== null) window.clearTimeout(flyTimer.current);
+    },
+    [],
+  );
+
+  /** Gửi kết quả; khóa phải được giữ trước khi gọi. */
+  const send = useCallback(
     (rating: Grade) => {
-      if (answered.current) return;
-      answered.current = true;
       void onAnswer(rating).finally(() => {
-        // Lỗi khi lưu: cho thử lại trên cùng thẻ.
+        // Lỗi khi lưu: mở khóa để thử lại trên cùng thẻ.
         answered.current = false;
         setLeaving(null);
         setDragX(0);
@@ -278,14 +368,27 @@ function Flashcard({ item, grades, counts, onAnswer }: FlashcardProps) {
     [onAnswer],
   );
 
-  /** Cho thẻ bay sang trái/phải rồi chấm (trái = Quên, phải = Nhớ). */
+  const submit = useCallback(
+    (rating: Grade) => {
+      if (answered.current) return;
+      answered.current = true;
+      send(rating);
+    },
+    [send],
+  );
+
+  /** Cho thẻ bay sang trái/phải rồi chấm (trái = Quên, phải = Nhớ). Khóa ngay từ lúc bắt đầu bay. */
   const swipe = useCallback(
     (direction: "left" | "right") => {
-      if (answered.current || leaving) return;
+      if (answered.current) return;
+      answered.current = true;
       setLeaving(direction);
-      window.setTimeout(() => submit(direction === "right" ? Rating.Good : Rating.Again), FLY_MS);
+      flyTimer.current = window.setTimeout(() => {
+        flyTimer.current = null;
+        send(direction === "right" ? Rating.Good : Rating.Again);
+      }, FLY_MS);
     },
-    [submit, leaving],
+    [send],
   );
 
   useEffect(() => {
@@ -442,46 +545,25 @@ function Answer({ item }: { item: ReviewItem }) {
   );
 }
 
-const CHEERS = {
-  perfect: [
-    "Hoàn hảo! Không quên từ nào 🎯",
-    "Xuất sắc! Trí nhớ của bạn đang ở phong độ đỉnh cao 💯",
-    "Quá đỉnh! Cứ giữ nhịp này là JLPT chỉ là chuyện nhỏ 🏆",
-  ],
-  good: [
-    "Làm tốt lắm! Mỗi lượt ôn là một bước gần hơn tới mục tiêu 🚀",
-    "Tuyệt vời! Từ vựng đang bám rễ vào đầu bạn rồi đấy 🌸",
-    "Giỏi lắm! Kiên trì mỗi ngày là bí quyết nhớ lâu 💪",
-  ],
-  keep: [
-    "Quên là một phần của nhớ — ôn lại ngay là nhớ lâu hơn 🌱",
-    "Không sao cả! Từ khó hôm nay sẽ là từ quen ngày mai ✨",
-    "Bạn đang tiến bộ từng chút một. Ôn lại từ vừa quên nhé! 🔁",
-  ],
-};
-
-function pickCheer(remembered: number, total: number): string {
-  const rate = total === 0 ? 0 : remembered / total;
-  const list = rate === 1 ? CHEERS.perfect : rate >= 0.7 ? CHEERS.good : CHEERS.keep;
-  return list[Math.floor(Math.random() * list.length)];
-}
-
 type ScopeKind = ReviewScope["kind"];
 
-interface SetupProps {
+interface OptionsProps {
   db: Db;
   settings: Settings;
   initial: ScopeChoice;
-  onStart: (kind: RoundKind, choice: ScopeChoice) => void;
+  initialIncludeMastered: boolean;
+  onStart: (kind: RoundKind, choice: ScopeChoice, includeMastered: boolean) => void;
+  onCancel: () => void;
 }
 
-/** Màn đầu tab Ôn tập: chọn phạm vi (tất cả / theo chủ đề / chưa có chủ đề) rồi chọn cách ôn. */
-function ReviewSetup({ db, settings, initial, onStart }: SetupProps) {
+/** Tùy chọn ôn: chọn phạm vi (tất cả / theo chủ đề / chưa có chủ đề), rồi Ôn theo lịch hoặc Luyện tự do. */
+function ReviewOptions({ db, settings, initial, initialIncludeMastered, onStart, onCancel }: OptionsProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [kind, setKind] = useState<ScopeKind>(initial.scope.kind);
   const [topicIds, setTopicIds] = useState<Set<number>>(
     new Set(initial.scope.kind === "topics" ? initial.scope.topicIds : []),
   );
+  const [includeMastered, setIncludeMastered] = useState(initialIncludeMastered);
   const [overview, setOverview] = useState<ReviewOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -529,16 +611,23 @@ function ReviewSetup({ db, settings, initial, onStart }: SetupProps) {
     return "Tất cả từ";
   }
 
-  const start = (round: RoundKind) => onStart(round, { scope, label: label() });
+  const start = (round: RoundKind) => onStart(round, { scope, label: label() }, includeMastered);
   const noTopicPicked = kind === "topics" && topicIds.size === 0;
-  const nextMain = overview ? overview.dueNow + overview.newTodayLeft : 0;
+  const todayCount = overview ? overview.dueNow + overview.newTodayLeft : 0;
+  const total = overview ? overview.newLeft + overview.learned : 0;
+  const freeCount = overview ? (includeMastered ? total : total - overview.mastered) : 0;
 
   return (
     <section className="stack review-setup card-enter">
-      <h1>Ôn tập</h1>
+      <div className="row">
+        <h1>Tùy chọn ôn</h1>
+        <button className="push-right" onClick={onCancel}>
+          ← Về Ôn hôm nay
+        </button>
+      </div>
 
       <div className="card stack">
-        <h2>1. Ôn phần nào?</h2>
+        <h2>Phạm vi</h2>
         <div className="scope-options">
           {(
             [
@@ -566,37 +655,47 @@ function ReviewSetup({ db, settings, initial, onStart }: SetupProps) {
               ))}
             </div>
           ))}
+        {overview && !noTopicPicked && (
+          <p className="muted small">
+            {total} từ: 🆕 {overview.newLeft} mới · 📖 {overview.learned - overview.mastered} đang học · ✅ {overview.mastered}{" "}
+            vững
+          </p>
+        )}
       </div>
 
       <div className="card stack">
-        <h2>2. Ôn thế nào?</h2>
         {noTopicPicked ? (
           <p className="muted small">Chọn ít nhất 1 chủ đề.</p>
         ) : overview === null ? (
           <p className="muted small">Đang đếm…</p>
-        ) : overview.total === 0 ? (
+        ) : total === 0 ? (
           <p className="muted small">Phạm vi này chưa có từ nào có nghĩa để ôn.</p>
         ) : (
           <div className="setup-actions">
-            <button className="setup-action primary" onClick={() => start("main")} disabled={nextMain === 0}>
+            <button className="setup-action primary" onClick={() => start("today")} disabled={todayCount === 0}>
               <strong>▶️ Ôn theo lịch</strong>
-              <span>{nextMain > 0 ? `${nextMain} thẻ đến hạn / từ mới hôm nay` : "Hôm nay đã ôn xong lịch"}</span>
+              <span>
+                {todayCount > 0 ? `${todayCount} từ đến hạn / từ mới hôm nay` : "Phạm vi này hôm nay đã ôn xong"} · tính vào lịch
+              </span>
             </button>
-            <button className="setup-action" onClick={() => start("new")} disabled={overview.newLeft === 0}>
-              <strong>✨ Học từ mới</strong>
-              <span>{overview.newLeft} từ chưa học</span>
-            </button>
-            <button className="setup-action" onClick={() => start("random")}>
-              <strong>🎲 Luyện ngẫu nhiên</strong>
-              <span>Bốc {Math.min(settings.sessionSize, overview.total)} trong {overview.total} từ, ưu tiên từ yếu</span>
-            </button>
-            <button className="setup-action" onClick={() => start("all")}>
-              <strong>🔄 Luyện toàn bộ</strong>
-              <span>Đi hết {overview.total} từ, mỗi lượt {settings.sessionSize}</span>
-            </button>
+            <div className="stack">
+              <button className="setup-action" onClick={() => start("free")} disabled={freeCount === 0}>
+                <strong>🏋️ Luyện tự do</strong>
+                <span>
+                  Đi hết {freeCount} từ, mỗi lượt {settings.sessionSize} · không đổi lịch
+                </span>
+              </button>
+              <label className="row small">
+                <input
+                  type="checkbox"
+                  checked={includeMastered}
+                  onChange={(e) => setIncludeMastered(e.target.checked)}
+                />
+                Gồm cả từ ✅ Vững ({overview.mastered})
+              </label>
+            </div>
           </div>
         )}
-        <p className="muted small">"Ôn theo lịch" và "Học từ mới" tính vào lịch ôn. Luyện ngẫu nhiên / toàn bộ không đổi lịch.</p>
         {error && <p className="error">{error}</p>}
       </div>
     </section>
@@ -607,27 +706,43 @@ interface SummaryProps {
   round: Round | null;
   results: Result[];
   overview: ReviewOverview;
-  level: string;
+  /** Từ cũ trong phạm vi chưa gặp ở "Ôn từ vựng cũ" (lần mở app này). */
+  oldLeft: number;
+  settings: Settings;
   /** Nhãn phạm vi đang ôn (vd. "Chủ đề: Động từ"). */
   scopeLabel: string;
-  /** Số từ còn lại trong "Luyện lại toàn bộ". */
-  allLeft: number;
+  /** Số từ còn lại trong "Luyện tự do". */
+  freeLeft: number;
   onChoose: (kind: RoundKind) => void;
-  onChangeScope: () => void;
+  onOptions: () => void;
 }
 
-function RoundSummary({ round, results, overview, level, scopeLabel, allLeft, onChoose, onChangeScope }: SummaryProps) {
+function formatDay(date: string): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "numeric" });
+}
+
+function RoundSummary({
+  round,
+  results,
+  overview,
+  oldLeft,
+  settings,
+  scopeLabel,
+  freeLeft,
+  onChoose,
+  onOptions,
+}: SummaryProps) {
   const forgotten = results.filter((r) => r.rating === Rating.Again).map((r) => r.item);
   const remembered = results.length - forgotten.length;
-  const [cheer] = useState(() => pickCheer(remembered, results.length));
+  // Linh vật khen/động viên dạng thông báo; đóng được, tự ẩn sau vài giây.
+  const [showMascot, setShowMascot] = useState(results.length > 0);
   const [copyMessage, setCopyMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const finishedAll = overview.dueNow === 0 && overview.newLeft === 0 && overview.total > 0;
-  const nextMain = overview.dueNow + overview.newTodayLeft;
-  const graded = round !== null && GRADED[round.kind];
+  const todayLeft = overview.dueNow + overview.newTodayLeft;
+  const newBatch = Math.min(settings.sessionSize, overview.newLeft);
 
   async function copyPrompt() {
     try {
-      await writeText(buildMistakesPrompt(forgotten, level));
+      await writeText(buildMistakesPrompt(forgotten, settings.level));
       setCopyMessage({ kind: "ok", text: "Đã copy. Dán vào ChatGPT để đọc giải thích." });
     } catch (e) {
       setCopyMessage({ kind: "error", text: `Không copy được: ${String(e)}` });
@@ -637,22 +752,25 @@ function RoundSummary({ round, results, overview, level, scopeLabel, allLeft, on
   return (
     <section className="stack session-end card-enter">
       {results.length > 0 && <Confetti />}
+      {showMascot && (
+        <MascotToast
+          mascot={settings.mascot}
+          remembered={remembered}
+          total={results.length}
+          onClose={() => setShowMascot(false)}
+        />
+      )}
       <div className="row">
         <h1>Ôn tập</h1>
         <span className="badge scope-badge">{scopeLabel}</span>
-        <button className="push-right" onClick={onChangeScope}>
-          ⚙️ Đổi phạm vi ôn
+        <button className="push-right" onClick={onOptions}>
+          ⚙️ Tùy chọn
         </button>
       </div>
-      {results.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-mark jp">休</div>
-          <p>Không có thẻ nào đến hạn lúc này.</p>
-        </div>
-      ) : (
+
+      {results.length > 0 && (
         <>
           <p className="session-title">Xong lượt! 🎉</p>
-          <p className="cheer">{cheer}</p>
           <div className="stat-tiles">
             <StatTile label="Thẻ" value={results.length} />
             <StatTile label="Nhớ" value={remembered} tone="good" />
@@ -662,10 +780,14 @@ function RoundSummary({ round, results, overview, level, scopeLabel, allLeft, on
         </>
       )}
 
-      {finishedAll && (
+      {todayLeft === 0 && (
         <div className="all-done card stack">
-          <p className="session-title">🏁 Bạn đã ôn hết toàn bộ vốn từ!</p>
-          <p className="muted small">Không còn thẻ đến hạn và không còn từ mới. Muốn ôn lại từ đầu thì luyện toàn bộ nhé.</p>
+          <p className="session-title">✅ Hôm nay xong rồi!</p>
+          <p className="muted small">
+            {overview.nextDue
+              ? `Đợt ôn tiếp theo: ${formatDay(overview.nextDue.date)} — ${overview.nextDue.count} từ đến hạn.`
+              : "Chưa có lịch ôn nào. Học thêm từ mới để bắt đầu."}
+          </p>
         </div>
       )}
 
@@ -677,32 +799,29 @@ function RoundSummary({ round, results, overview, level, scopeLabel, allLeft, on
               🔁 Ôn lại {forgotten.length} từ vừa quên
             </button>
           )}
-          {graded && round.items.length > 0 && (
-            <>
-              <button onClick={() => onChoose("recent")}>📘 Ôn lại {round.items.length} từ vừa học</button>
-              {overview.total > round.items.length && (
-                <button onClick={() => onChoose("mix")}>📚 Từ vừa học + từ cũ</button>
-              )}
-            </>
+          {round?.kind === "free" && freeLeft > 0 && (
+            <button className="primary" onClick={() => onChoose("free")}>
+              🏋️ Luyện tiếp (còn {freeLeft} từ)
+            </button>
           )}
-          {nextMain > 0 && <button onClick={() => onChoose("main")}>▶️ Lượt ôn tiếp theo ({nextMain} thẻ chờ)</button>}
-          {overview.newLeft > 0 && <button onClick={() => onChoose("new")}>✨ Học thêm từ mới ({overview.newLeft} từ)</button>}
-          {overview.total > 0 && (
-            <button onClick={() => onChoose("random")}>🎲 Luyện ngẫu nhiên (trong {overview.total} từ)</button>
+          {todayLeft > 0 && (
+            <button className={forgotten.length === 0 ? "primary" : ""} onClick={() => onChoose("today")}>
+              ▶️ Ôn tiếp hôm nay ({todayLeft} từ)
+            </button>
           )}
-          {overview.total > 0 &&
-            (round?.kind === "all" && allLeft > 0 ? (
-              <button className="primary" onClick={() => onChoose("all")}>
-                🔄 Luyện tiếp toàn bộ (còn {allLeft} từ)
-              </button>
-            ) : (
-              <button className={finishedAll ? "primary" : ""} onClick={() => onChoose("all")}>
-                🔄 {round?.kind === "all" || finishedAll ? "Luyện lại toàn bộ từ đầu" : "Luyện toàn bộ vốn từ"} (
-                {overview.total} từ)
-              </button>
-            ))}
+          {overview.newLeft > 0 && (
+            <button onClick={() => onChoose("new")}>✨ Học thêm {newBatch} từ mới (còn {overview.newLeft})</button>
+          )}
+          {overview.learned > 0 && (
+            <button onClick={() => onChoose("old")}>
+              📚 Ôn từ vựng cũ{" "}
+              {oldLeft > 0 ? `(còn ${oldLeft} từ chưa ôn)` : "(đã ôn hết — bắt đầu vòng mới)"}
+            </button>
+          )}
         </div>
-        <p className="muted small">Luyện thêm không đổi lịch ôn. Chỉ "Lượt ôn" và "Học thêm từ mới" mới tính vào lịch.</p>
+        <p className="muted small">
+          "Ôn hôm nay" và "Học thêm từ mới" tính vào lịch. Ôn lại từ quên / từ vựng cũ / luyện tự do chỉ để luyện, không đổi lịch.
+        </p>
       </div>
 
       {forgotten.length > 0 && (
@@ -729,9 +848,6 @@ function RoundSummary({ round, results, overview, level, scopeLabel, allLeft, on
         </div>
       )}
 
-      {overview.nextDue && nextMain === 0 && (
-        <p className="muted small">Thẻ đến hạn gần nhất: {new Date(overview.nextDue).toLocaleString("vi-VN")}</p>
-      )}
       {overview.notReady > 0 && (
         <p className="muted small">
           {overview.notReady} từ chưa có nghĩa nên chưa vào ôn. Bổ sung ở tab Thêm từ hoặc Kho từ.

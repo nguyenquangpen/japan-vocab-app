@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Db } from "../db/db";
 import { createTestDb } from "../db/nodeSqliteDb";
-import { loadMainRound, submitReview } from "../review/review";
+import { loadTodayRound, submitReview } from "../review/review";
 import { Rating } from "../review/scheduler";
 import { DEFAULT_SETTINGS } from "../settings/settings";
 import { addWordsToTopic, createTopic } from "../topics/topics";
@@ -37,7 +37,7 @@ describe("loadStats", () => {
     await addWordsToTopic(db, topic.id, [eat]);
 
     // 2 ngày trước: quên 食べる; hôm nay: nhớ.
-    const [item] = await loadMainRound(db, DEFAULT_SETTINGS, daysAgo(2));
+    const item = (await loadTodayRound(db, DEFAULT_SETTINGS, daysAgo(2))).find((i) => i.term === "食べる")!;
     expect(item.term).toBe("食べる");
     const graded = await submitReview(db, item, Rating.Again, false, daysAgo(2));
     await submitReview(db, graded, Rating.Good, true, NOW);

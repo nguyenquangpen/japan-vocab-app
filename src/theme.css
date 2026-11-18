@@ -875,6 +875,22 @@ button.danger:not(:disabled):hover {
   box-shadow: var(--shadow);
 }
 
+/* Trạng thái từ trên thẻ đang ôn */
+.badge.status-new {
+  color: #8a4b00;
+  background: #fff4e0;
+}
+
+.badge.status-learning {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.badge.status-mastered {
+  color: var(--good);
+  background: var(--good-soft);
+}
+
 .scope-badge {
   color: var(--accent);
   background: var(--accent-soft);
@@ -906,11 +922,6 @@ button.danger:not(:disabled):hover {
 }
 
 /* Hết lượt */
-.cheer {
-  font-size: 1.1rem;
-  animation: fade-in 0.5s var(--ease) 0.15s both;
-}
-
 .next-actions {
   display: flex;
   flex-wrap: wrap;
@@ -960,6 +971,357 @@ button.danger:not(:disabled):hover {
     opacity: 0;
     transform: translate(var(--drift), 105vh) rotate(var(--spin));
   }
+}
+
+/* ===== Linh vật: chọn trong Cài đặt và thông báo cuối lượt ôn ===== */
+.mascot-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mascot-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 92px;
+  padding: 8px 10px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s var(--ease), box-shadow 0.15s;
+}
+
+.mascot-option:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.mascot-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mascot-option:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Ẩn nút radio nhưng vẫn dùng được bằng bàn phím. */
+.mascot-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mascot-option-emoji {
+  font-size: 30px;
+  line-height: 1.2;
+}
+
+.mascot-option-name {
+  font-size: 13px;
+}
+
+.mascot-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  max-width: 340px;
+  padding: 16px 18px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: mascot-toast-in 0.5s var(--ease) both;
+}
+
+.mascot-toast.perfect {
+  background:
+    radial-gradient(260px 120px at 50% 0%, var(--good-soft) 0%, transparent 75%),
+    var(--surface);
+}
+
+.mascot-toast-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mascot-toast-close:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mascot-emoji {
+  font-size: 52px;
+  line-height: 1;
+  user-select: none;
+}
+
+.mascot-title {
+  display: block;
+  font-size: 16px;
+}
+
+.mascot-text {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Nhớ hết: linh vật giơ tấm bảng gỗ */
+.mascot-sign-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.mascot-sign {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 100%;
+  animation: mascot-sign-wobble 2.4s ease-in-out 0.5s infinite;
+}
+
+.mascot-sign-board {
+  max-width: 270px;
+  padding: 10px 14px;
+  border: 3px solid #8a5a2b;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 9px, rgb(138 90 43 / 10%) 9px 10px),
+    linear-gradient(180deg, #f6dfb5, #e9c48b);
+  box-shadow: 0 3px 0 #6e4520, var(--shadow);
+  color: #4a2e12;
+  text-align: center;
+}
+
+.mascot-sign-board .mascot-title {
+  margin-bottom: 2px;
+  color: var(--good);
+  font-size: 18px;
+}
+
+.mascot-sign-posts {
+  display: flex;
+  gap: 70px;
+  height: 22px;
+}
+
+.mascot-sign-posts span {
+  width: 6px;
+  height: 100%;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg, #8a5a2b, #6e4520);
+}
+
+.mascot-sign-scene .mascot-emoji {
+  margin-top: -6px;
+  animation: mascot-hop 0.6s var(--ease) 0.4s both;
+}
+
+/* Chưa hoàn hảo: linh vật nói bằng bong bóng thoại */
+.mascot-talk {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding-right: 14px;
+}
+
+.mascot-bubble {
+  position: relative;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+}
+
+.mascot-bubble::before {
+  content: "";
+  position: absolute;
+  bottom: 12px;
+  left: -8px;
+  border-width: 8px 10px 8px 0;
+  border-style: solid;
+  border-color: transparent var(--accent-soft) transparent transparent;
+}
+
+.mascot-bubble .mascot-title {
+  color: var(--accent);
+}
+
+.mascot-score {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mascot-talk .mascot-emoji {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes mascot-toast-in {
+  0% {
+    opacity: 0;
+    transform: translateX(120%) scale(0.9);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-6px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mascot-sign-wobble {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes mascot-hop {
+  0% {
+    transform: translateY(16px) scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-6px) scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* ---------- Luyện tập ---------- */
+.practice-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.match-board {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.match-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.match-item {
+  min-height: 44px;
+  font-size: 1.05rem;
+  transition: background 0.2s, border-color 0.2s;
+}
+.match-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent) inset;
+}
+.match-item.correct {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #14532d;
+  animation: pop 0.3s;
+}
+.match-item.wrong {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #7f1d1d;
+  animation: shake 0.4s;
+}
+.cloze-sentence {
+  font-size: 1.5rem;
+  line-height: 1.8;
+}
+.cloze-blank {
+  display: inline-block;
+  min-width: 3em;
+  margin: 0 4px;
+  border-bottom: 2px solid currentColor;
+  text-align: center;
+  font-weight: 700;
+}
+.choice-prompt {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.order-answer,
+.order-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 52px;
+  padding: 8px;
+  border-radius: 10px;
+}
+.order-answer {
+  border: 2px dashed rgba(127, 127, 127, 0.4);
+}
+.order-answer.correct {
+  border-color: #16a34a;
+}
+.order-answer.wrong {
+  border-color: #dc2626;
+  animation: shake 0.4s;
+}
+.order-piece {
+  font-size: 1.1rem;
+  padding: 6px 12px;
+}
+.order-pool .order-piece:disabled {
+  opacity: 0.3;
+}
+.order-verdict.good {
+  color: #16a34a;
+}
+.order-verdict.bad {
+  color: #dc2626;
+}
+
+/* Kana xanh nhỏ dưới chữ Hán (thẻ nối từ, mảnh xếp câu) */
+.match-item,
+.order-piece {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.kana-note {
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+  color: var(--good);
+}
+
+.order-piece.placed .kana-note,
+.match-item.correct .kana-note {
+  color: inherit;
+  opacity: 0.85;
 }
 
 /* Tôn trọng cài đặt giảm chuyển động của Windows. */

@@ -347,3 +347,56 @@ Nguyên tắc:
   2. **Ôn thế nào** (kèm số trong phạm vi): Ôn theo lịch · Học từ mới · Luyện ngẫu nhiên · Luyện toàn bộ.
   - Mọi lượt sau (nút ở màn hết lượt) giữ phạm vi đã chọn; màn hết lượt có nhãn phạm vi + nút "Đổi phạm vi ôn". Giới hạn từ mới mỗi ngày là chung, không chia theo phạm vi.
 - **Ví dụ trên mặt sau flashcard** hiện đủ 3 dòng: câu tiếng Nhật (chữ Hán), **cách đọc kana** (chữ nhỏ, màu nhấn; ẩn nếu ví dụ chưa có cách đọc hoặc trùng với câu), nghĩa tiếng Việt. Vẫn chỉ hiện ví dụ đầu tiên của từ.
+
+### Quy trình ôn tập gọn lại (2026-11-04) — **thay thế** các mục "Lượt ôn, luyện thêm…" và "Sửa ví dụ + chọn phạm vi ôn" phía trên về luồng ôn
+
+Lý do (đo trên DB thật): 7 kiểu lượt quá rối; các lượt luyện thêm hiện cả từ đã thuộc nên có cảm giác "ôn đi ôn lại"; từ mới lấy cũ nhất trước nên từ vừa nhập không được học; mở app là màn chọn nên hay rơi vào luyện ngẫu nhiên.
+
+- **Trạng thái mỗi từ** (`wordStatus`): 🆕 Mới (chưa ôn) · 📖 Đang học · ✅ Vững (stability ≥ 21 ngày). Hiện trên thẻ đang ôn.
+- **Mở app = "Ôn hôm nay"** (toàn bộ vốn từ, tính vào lịch): từ đến hạn trước (hạn sớm nhất trước), rồi **từ mới — mới thêm nhất trước** — trong giới hạn `new_per_day`; tối đa `session_size` thẻ mỗi lượt. Không còn gì → "✅ Hôm nay xong rồi!" + "Đợt ôn tiếp theo: <thứ, ngày> — N từ đến hạn".
+- **Hết lượt chỉ còn các nút:** 🔁 Ôn lại N từ vừa quên (không đổi lịch) · ▶️ Ôn tiếp hôm nay (nếu còn) · ✨ Học thêm N từ mới (mới nhất trước, vượt `new_per_day`, tính vào lịch) · 📚 Ôn từ vựng cũ (ngẫu nhiên đều trong các từ đã học, kể cả Vững, tránh lặp lượt ngay trước; không đổi lịch).
+- **⚙️ Tùy chọn** (từ màn hết lượt): chọn phạm vi (tất cả / theo chủ đề / chưa có chủ đề) rồi ▶️ Ôn theo lịch trong phạm vi, hoặc 🏋️ **Luyện tự do**: đi hết các từ trong phạm vi theo từng lượt (xáo trộn), **mặc định bỏ từ Vững**, tick "Gồm cả từ ✅ Vững" để luyện cả. Không đổi lịch.
+- Bỏ: Ôn lại từ vừa học, Từ vừa học + từ cũ, Luyện ngẫu nhiên có trọng số (`practiceWeight`, `pickPractice`, `retrievability`), màn chọn khi mở tab.
+- Chỉ "Ôn hôm nay" và "Học thêm từ mới" ghi FSRS + review_logs.
+- **Ôn từ vựng cũ không lặp trong 1 lần mở app** (`src/review/oldWordsMemory.ts`): nhớ các từ cũ đã gặp ở biến cấp module, **riêng cho từng phạm vi** (giữ khi đổi tab, mất khi tắt app); đầu vòng mới tránh các từ của lượt ngay trước. Mỗi lượt chỉ bốc từ chưa gặp, thứ tự xáo trộn; gặp hết thì sang vòng mới. Nút hiện "(còn N từ chưa ôn)" / "(đã ôn hết — bắt đầu vòng mới)". Bỏ `pickRandom`.
+- **Linh vật** (`src/mascot/mascot.ts`, `src/tabs/MascotToast.tsx`): chọn trong Cài đặt (key `mascot`: cat 🐱 / shiba 🐶 / fox 🦊 / panda 🐼 / frog 🐸, mặc định cat). Hết lượt hiện **thông báo** góc dưới phải (thay dòng chữ khen cũ): nhớ hết → linh vật **giơ bảng** khen; chưa hết → bong bóng lời động viên + "Nhớ X/Y thẻ". Đóng được, tự ẩn sau 7 giây.
+- Chống chấm 2 lần: kéo/phím ←→ khóa thẻ ngay khi bắt đầu bay ra (phím số bị bỏ qua), hẹn giờ bay được hủy khi thẻ bị gỡ. Lưu kết quả và tải màn tổng kết tách riêng: tải tổng kết lỗi thì không cho chấm lại thẻ vừa lưu.
+
+## Phase Luyện tập (2026-11-13)
+
+Tab riêng **"Luyện tập"** (giữa Kho từ và Thống kê). Quiz cũ trong Kho từ giữ nguyên, tách riêng. **Không ảnh hưởng độ thuộc**: không chấm FSRS, không ghi `review_logs` (chỉ có thể tạo thẻ Mới còn thiếu qua `ensureCards` khi tải từ, như các màn khác).
+
+- **Chọn phạm vi**: tất cả / theo chủ đề / từ chưa có chủ đề → chọn bài.
+- **5 bài** (`src/practice/exercises.ts`, hàm thuần, rng truyền vào được):
+  1. 🔗 Nối từ (chữ Hán ↔ nghĩa Việt), 2 vòng × 5 cặp.
+  2. 🈁 Nối chữ Hán ↔ kana (bỏ từ toàn kana / không có kana).
+  3. Chọn từ đúng (Việt → Nhật), 4 đáp án, ~10 câu.
+  4. ✏️ Điền từ vào câu: câu ChatGPT tạo + câu ví dụ có sẵn chứa nguyên chữ của từ; 4 đáp án (nhiễu của ChatGPT, thiếu thì bù từ khác).
+  5. 🧩 Xếp câu: xếp các mảnh cho khớp nghĩa tiếng Việt; chỉ dùng câu ChatGPT tạo.
+  - Bài thiếu dữ liệu thì nút bị khóa kèm lý do (cần ≥ 4 từ; cần có câu). Hết bài: điểm, danh sách sai, Làm lại / Chọn bài khác, linh vật.
+- **Tạo câu bằng ChatGPT** (`src/practice/generated.ts`, `src/tabs/GeneratePanel.tsx`): lô ≤ 30 từ của phạm vi, ưu tiên từ chưa có câu → Copy prompt (mỗi từ 2 câu điền + 1 câu xếp, theo `level`) → dán JSON → zod (jitless) + lỗi tiếng Việt "Từ thứ N (term)" → xem trước → Lưu (thay câu ChatGPT cũ của các từ đó: xóa rồi chèn 1 câu, chạy lại được).
+- Migration `0005_practice_items.sql`: bảng `practice_items` (word_id → words ON DELETE CASCADE, kind `cloze`/`order`, data JSON, vi, created_at), chỉ mục (word_id, kind).
+- Sau review: "Chọn từ đúng" bỏ nhiễu có chung nghĩa với đáp án (tránh 2 đáp án đúng); bỏ câu điền lộ đáp án (từ xuất hiện 2 lần, hoặc `before+after` chứa đáp án); câu xếp cần ≥ 2 mảnh sau khi bỏ khoảng trắng; từ mà ChatGPT trả về không còn câu dùng được thì **không** lưu (không xóa câu cũ) và báo trong "chưa trả về"; đổi phạm vi thì bỏ dữ liệu phạm vi cũ cho tới khi tải xong.
+- **Kana xanh** (2026-11-13): thẻ chữ Hán ở bài Nối từ và mỗi mảnh ở bài Xếp câu có dòng kana nhỏ màu xanh bên dưới. Prompt xếp câu có thêm `readings` (cách đọc hiragana từng mảnh, tùy chọn; sai số lượng thì bỏ qua). Câu tạo trước đó không có kana cho tới khi tạo lại.
+- **Xếp câu phải đúng mới đi tiếp**: sai thì báo, sửa/xếp lại (Enter = xếp lại từ đầu), sai từ lần 2 hiện gợi ý; chỉ khi đúng mới có nút sang câu tiếp. Điểm chỉ tính câu đúng ngay lần đầu; câu sai lần đầu vào danh sách lỗi.
+
+## Tích hợp Personal Productivity Hub (2026-11-18)
+
+Theo hợp đồng v1 `docs/2026-11-07-japanese-app-integration.md`. App chỉ gửi sự việc đã xảy ra; không gửi XP/Goal/tiến độ.
+
+- **Ngoại lệ mạng hẹp** (ghi trong CLAUDE.md): chỉ lệnh Rust `hub_post` gửi POST tới `http://127.0.0.1:<port>/api/v1/integrations/events`. Không plugin http, không nới CSP.
+- **Sự kiện gửi:**
+  - `learning.session.completed`: mỗi lượt ôn (tab Ôn tập) xong, dài ≥ 1 phút; activity `vocabulary`, `items_reviewed` = số thẻ.
+  - `lesson.completed`: mỗi bài trong tab Luyện tập xong (tên bài, điểm 0–100, thời lượng).
+  - `vocabulary.learned`: **"đã thuộc" = từ lần đầu đạt ✅ Vững** (thẻ meaning stability ≥ 21 ngày). Cuối mỗi lượt ôn có chấm lịch, gom các từ vừa lần đầu thành Vững thành 1 sự kiện; mỗi từ chỉ báo 1 lần (bảng `hub_mastered_reported`).
+  - Heartbeat khi khởi động và tối đa 6 giờ/lần (không lưu, lỗi thì bỏ).
+- **Outbox** (migration 6, bảng `hub_outbox`): ghi sự kiện vào DB trước khi gửi; `event_id` UUID sinh 1 lần; `dedupe_key` chống tạo trùng khi mở lại màn kết quả. Bộ gửi nền tuần tự theo `recorded_at`, xử lý mã trả về và backoff đúng mục 7 của hợp đồng.
+- **Cài đặt → Tích hợp Hub:** bật/tắt, địa chỉ Hub (chỉ `http://127.0.0.1:<port>`), API key (`pph_` + 32 ký tự, lưu trong settings — app cá nhân chạy local; không hiện lại sau khi lưu, không vào log). Hiện số sự kiện chờ/lỗi, lần gửi gần nhất, nút thử lại.
+- Khi tắt tích hợp, sự kiện vẫn được ghi vào outbox (bật lại sau không mất lịch sử).
+- Hub giả lập cho dev: `npm run fake-hub`.
+- **Sau review tích hợp Hub:**
+  - TS chỉ truyền địa chỉ gốc `http://127.0.0.1:<port>`; lệnh Rust tự gắn đường dẫn. Quy tắc URL hai bên được test bằng cùng một bộ ca (`src/hub/config.test.ts` ↔ test trong `hub.rs`). Lệnh gửi từ chối đầu vào ⇒ coi là lỗi cấu hình (dừng như 401), không retry mãi.
+  - Migration 6 đánh dấu sẵn các từ đã Vững từ trước là "đã báo" để Hub không nhận cả kho cũ là "vừa thuộc".
+  - Lưu cấu hình Hub ⇒ sự kiện đang chờ được gửi lại ngay (xóa `next_attempt_at`) + gửi heartbeat; nút Lưu không chờ gửi xong.
+  - Lệch nhỏ so với hợp đồng §5 (chấp nhận): sự kiện ghi vào outbox ngay sau khi lưu kết quả học (không cùng transaction vì plugin-sql không bảo đảm transaction qua nhiều lời gọi). Nếu app bị tắt đúng giữa lúc ghi outbox và đánh dấu từ đã báo, một từ Vững có thể bị báo 2 lần.
+  - ureq với `max_redirects(0)` trả nguyên phản hồi 3xx (không theo, không lỗi).

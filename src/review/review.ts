@@ -1,14 +1,16 @@
 import type { Db } from "../db/db";
 import type { Settings } from "../settings/settings";
 import { isKana } from "../vocab/text";
-import { State, gradeCard, newCardState, retrievability, type CardState, type Grade } from "./scheduler";
+import { MASTERED_STABILITY, State, gradeCard, newCardState, type CardState, type Grade } from "./scheduler";
 
 /**
  * Ôn tập bằng flashcard (docs/design.md mục 4). Mỗi từ có nghĩa = 1 thẻ `meaning`:
  * mặt trước chữ Hán + kana, mặt sau nghĩa + ví dụ, tự chấm Quên/Nhớ.
  *
- * - Lượt chính và lượt "học thêm từ mới" chấm qua FSRS (`submitReview`).
- * - Lượt luyện thêm (ôn lại từ quên, luyện ngẫu nhiên, luyện lại toàn bộ) không ghi DB.
+ * Mỗi từ có 3 trạng thái (`wordStatus`): Mới (chưa ôn) → Đang học → Vững (stability ≥ 21 ngày).
+ *
+ * - "Ôn hôm nay" (mở app là chạy) và "Học thêm từ mới" chấm qua FSRS (`submitReview`), quyết định lịch.
+ * - Ôn lại từ vừa quên, Ôn từ vựng cũ, Luyện tự do: chỉ luyện, không ghi DB, không đổi lịch.
  * - Thẻ `reading` cũ (bản có thẻ gõ cách đọc) vẫn nằm trong DB nhưng không còn được ôn.
  */
 
@@ -26,19 +28,28 @@ export interface ReviewItem {
   kanaOnly: boolean;
 }
 
+export type WordStatus = "new" | "learning" | "mastered";
+
+export function wordStatus(card: CardState): WordStatus {
+  if (card.state === State.New) return "new";
+  return card.stability >= MASTERED_STABILITY ? "mastered" : "learning";
+}
+
 export interface ReviewOverview {
   /** Từ chưa có nghĩa nên chưa vào ôn. */
   notReady: number;
-  /** Hạn gần nhất của thẻ đã học (ISO), null nếu chưa có. */
-  nextDue: string | null;
   /** Thẻ đã học đang đến hạn. */
   dueNow: number;
-  /** Thẻ chưa học lần nào. */
+  /** Từ mới (chưa ôn lần nào). */
   newLeft: number;
   /** Số từ mới còn được học hôm nay theo `newPerDay`. */
   newTodayLeft: number;
-  /** Toàn bộ thẻ trong vốn từ (từ có nghĩa), dùng cho luyện thêm. */
-  total: number;
+  /** Từ đã ôn ít nhất 1 lần (Đang học + Vững). */
+  learned: number;
+  /** Trong số đã học, bao nhiêu từ Vững. */
+  mastered: number;
+  /** Đợt ôn theo lịch tiếp theo: ngày (giờ máy, YYYY-MM-DD) và số từ đến hạn ngày đó. null nếu chưa có từ đã học. */
+  nextDue: { date: string; count: number } | null;
 }
 
 /** Số ngẫu nhiên trong [0, 1). Truyền vào để test cố định được. */
@@ -81,10 +92,10 @@ export async function ensureCards(db: Db, now = new Date()): Promise<number> {
 }
 
 /**
- * Lượt chính: tối đa `sessionSize` thẻ. Thẻ đến hạn trước (hạn sớm nhất trước),
- * còn chỗ thì bù từ mới (cũ nhất trước) trong giới hạn `newPerDay` của hôm nay (giới hạn chung, không theo phạm vi).
+ * "Ôn hôm nay": tối đa `sessionSize` thẻ. Từ đến hạn trước (hạn sớm nhất trước), còn chỗ thì bù
+ * từ mới — **mới thêm nhất trước** — trong giới hạn `newPerDay` của hôm nay (giới hạn chung, không theo phạm vi).
  */
-export async function loadMainRound(
+export async function loadTodayRound(
   db: Db,
   settings: Settings,
   now = new Date(),
@@ -102,7 +113,7 @@ export async function loadMainRound(
   return [...due, ...(await selectNew(db, newCount, scope))].map(toItem);
 }
 
-/** Lượt "học thêm từ mới": tối đa `sessionSize` từ mới tiếp theo trong phạm vi, vượt giới hạn mỗi ngày. */
+/** "Học thêm từ mới": tối đa `sessionSize` từ mới tiếp theo (mới thêm nhất trước), vượt giới hạn mỗi ngày. */
 export async function loadNewRound(
   db: Db,
   settings: Settings,
@@ -113,46 +124,30 @@ export async function loadNewRound(
   return (await selectNew(db, roundSize(settings), scope)).map(toItem);
 }
 
-/** Mọi từ có nghĩa trong phạm vi (kể cả từ chưa ôn lần nào), dùng cho luyện thêm. */
-export async function loadPracticePool(db: Db, now = new Date(), scope: ReviewScope = ALL_WORDS): Promise<ReviewItem[]> {
+/**
+ * Từ có nghĩa trong phạm vi, dùng cho luyện (không đổi lịch).
+ * - `learnedOnly`: chỉ từ đã ôn ít nhất 1 lần (cho "Ôn từ vựng cũ").
+ * - `includeMastered = false`: bỏ từ Vững (mặc định của "Luyện tự do").
+ */
+export async function loadPracticePool(
+  db: Db,
+  options: { scope?: ReviewScope; learnedOnly?: boolean; includeMastered?: boolean } = {},
+  now = new Date(),
+): Promise<ReviewItem[]> {
   await ensureCards(db, now);
-  const s = scopeSql(scope);
-  const rows = await db.select<ItemRow>(`${ITEM_SELECT} WHERE ${READY} AND ${s.sql} ORDER BY c.id`, s.params);
+  const s = scopeSql(options.scope ?? ALL_WORDS);
+  const where = [READY, s.sql];
+  const params: unknown[] = [...s.params];
+  if (options.learnedOnly) {
+    where.push("c.state != ?");
+    params.push(State.New);
+  }
+  if (options.includeMastered === false) {
+    where.push("(c.state = ? OR c.stability < ?)");
+    params.push(State.New, MASTERED_STABILITY);
+  }
+  const rows = await db.select<ItemRow>(`${ITEM_SELECT} WHERE ${where.join(" AND ")} ORDER BY c.id`, params);
   return rows.map(toItem);
-}
-
-/**
- * Trọng số luyện thêm: khả năng quên hiện tại (1 − R) + độ "non" của thẻ (1 / (1 + stability)) + sàn 0.05.
- * Từ chưa ôn ≈ 2; thẻ yếu/mới học ≈ 0.5–1.5; thẻ đã thuộc (stability cao, vừa ôn) ≈ 0.05–0.2.
- */
-export function practiceWeight(card: CardState, now: Date): number {
-  return 0.05 + (1 - retrievability(card, now)) + 1 / (1 + Math.max(0, card.stability));
-}
-
-/**
- * Chọn ngẫu nhiên `size` thẻ để luyện, không lặp. Thẻ càng yếu càng hay được chọn;
- * thẻ đã thuộc vẫn có thể ra nhưng hiếm hơn nhiều.
- * Thẻ trong `avoid` (vd. lượt ngay trước) chỉ được chọn khi các thẻ khác không đủ.
- */
-export function pickPractice(
-  pool: ReviewItem[],
-  size: number,
-  now: Date,
-  rng: Rng = Math.random,
-  avoid: ReadonlySet<number> = new Set(),
-): ReviewItem[] {
-  const ranked = (items: ReviewItem[]) =>
-    items
-      .map((item) => {
-        const weight = practiceWeight(item.card, now);
-        // Efraimidis–Spirakis: khóa = u^(1/w), lấy các khóa lớn nhất.
-        return { item, key: Math.pow(Math.max(rng(), Number.MIN_VALUE), 1 / weight) };
-      })
-      .sort((a, b) => b.key - a.key)
-      .map(({ item }) => item);
-  const fresh = ranked(pool.filter((i) => !avoid.has(i.cardId)));
-  const repeat = ranked(pool.filter((i) => avoid.has(i.cardId)));
-  return [...fresh, ...repeat].slice(0, Math.max(0, size));
 }
 
 export function shuffle<T>(items: T[], rng: Rng = Math.random): T[] {
@@ -195,35 +190,48 @@ export async function getReviewOverview(
 ): Promise<ReviewOverview> {
   await ensureCards(db, now);
   const s = scopeSql(scope);
-  const cardsIn = `FROM cards c JOIN words w ON w.id = c.word_id WHERE c.skill = 'meaning' AND ${s.sql}`;
+  const cardsIn = `FROM cards c JOIN words w ON w.id = c.word_id WHERE c.skill = 'meaning' AND ${READY} AND ${s.sql}`;
   const [row] = await db.select<{
     not_ready: number;
-    next_due: string | null;
     due_now: number;
     new_left: number;
-    total: number;
+    learned: number;
+    mastered: number;
   }>(
     `SELECT
        (SELECT COUNT(*) FROM words w WHERE w.meanings_vi IS NULL AND ${s.sql}) AS not_ready,
-       (SELECT MIN(c.due) ${cardsIn} AND c.state != ?) AS next_due,
-       (SELECT COUNT(*) ${cardsIn} AND c.state != ? AND c.due <= ? AND ${READY}) AS due_now,
-       (SELECT COUNT(*) ${cardsIn} AND c.state = ? AND ${READY}) AS new_left,
-       (SELECT COUNT(*) ${cardsIn} AND ${READY}) AS total`,
+       (SELECT COUNT(*) ${cardsIn} AND c.state != ? AND c.due <= ?) AS due_now,
+       (SELECT COUNT(*) ${cardsIn} AND c.state = ?) AS new_left,
+       (SELECT COUNT(*) ${cardsIn} AND c.state != ?) AS learned,
+       (SELECT COUNT(*) ${cardsIn} AND c.state != ? AND c.stability >= ?) AS mastered`,
     [
       ...s.params,
-      ...s.params, State.New,
       ...s.params, State.New, now.toISOString(),
       ...s.params, State.New,
-      ...s.params,
+      ...s.params, State.New,
+      ...s.params, State.New, MASTERED_STABILITY,
     ],
   );
+
+  // Đợt tiếp theo: ngày (giờ máy) của hạn sớm nhất còn ở tương lai, và số từ đến hạn trong ngày đó.
+  const upcoming = await db.select<{ due: string }>(
+    `SELECT c.due ${cardsIn} AND c.state != ? AND c.due > ? ORDER BY c.due`,
+    [...s.params, State.New, now.toISOString()],
+  );
+  let nextDue: ReviewOverview["nextDue"] = null;
+  if (upcoming.length > 0) {
+    const date = localDate(new Date(upcoming[0].due));
+    nextDue = { date, count: upcoming.filter((u) => localDate(new Date(u.due)) === date).length };
+  }
+
   return {
     notReady: row.not_ready,
-    nextDue: row.next_due,
     dueNow: row.due_now,
     newLeft: row.new_left,
     newTodayLeft: Math.min(row.new_left, await newTodayLeft(db, settings, now)),
-    total: row.total,
+    learned: row.learned,
+    mastered: row.mastered,
+    nextDue,
   };
 }
 
@@ -242,12 +250,13 @@ async function newTodayLeft(db: Db, settings: Settings, now: Date): Promise<numb
   return Math.max(0, Math.trunc(settings.newPerDay) - n);
 }
 
+/** Từ mới, mới thêm nhất trước. */
 async function selectNew(db: Db, count: number, scope: ReviewScope): Promise<ItemRow[]> {
   if (count <= 0) return [];
   const s = scopeSql(scope);
   return db.select<ItemRow>(
     `${ITEM_SELECT} WHERE c.state = ? AND ${READY} AND ${s.sql}
-     ORDER BY w.created_at, w.id LIMIT ${Math.trunc(count)}`,
+     ORDER BY w.created_at DESC, w.id DESC LIMIT ${Math.trunc(count)}`,
     [State.New, ...s.params],
   );
 }
@@ -319,4 +328,9 @@ function parseMeanings(value: string): string[] {
 
 function startOfLocalDay(now: Date): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function localDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

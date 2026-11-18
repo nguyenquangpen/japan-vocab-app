@@ -24,6 +24,9 @@ describe("migrations", () => {
     expect(rows.map((r) => r.name)).toEqual([
       "cards",
       "examples",
+      "hub_mastered_reported",
+      "hub_outbox",
+      "practice_items",
       "quiz_answers",
       "quiz_sessions",
       "review_logs",
