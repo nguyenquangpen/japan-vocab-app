@@ -86,6 +86,12 @@ describe("buildChoiceQuestions", () => {
       expect(new Set(q.options).size).toBe(4);
       expect(q.options[q.answerIndex]).toBe(w.term);
       expect(q.prompt).toBe(w.meanings.join("; "));
+      // Kana dưới từng lựa chọn, đúng thứ tự lựa chọn.
+      expect(q.optionNotes).toHaveLength(4);
+      q.options.forEach((o, i) => {
+        const ow = WORDS.find((x) => x.term === o)!;
+        expect(q.optionNotes![i]).toBe(!ow.kanaOnly && ow.reading && ow.reading !== ow.term ? ow.reading : null);
+      });
     }
   });
 

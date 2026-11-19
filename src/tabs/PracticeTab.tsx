@@ -602,7 +602,11 @@ function ChoiceRun({
           const state = picked === null ? "" : i === question.answerIndex ? "correct" : i === picked ? "wrong" : "";
           return (
             <button key={i} className={`quiz-option jp ${state}`} onClick={() => choose(i)} disabled={picked !== null}>
-              <span className="grade-key">{i + 1}</span> {option}
+              <span className="grade-key">{i + 1}</span>
+              <span className="option-text">
+                <span className="match-text">{option}</span>
+                {question.optionNotes?.[i] && <span className="kana-note">{question.optionNotes[i]}</span>}
+              </span>
             </button>
           );
         })}

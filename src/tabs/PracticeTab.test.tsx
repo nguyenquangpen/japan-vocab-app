@@ -103,7 +103,9 @@ describe("PracticeTab", () => {
     for (let i = 0; i < 6; i++) {
       const prompt = document.querySelector(".choice-prompt")!.textContent!;
       const options = [...document.querySelectorAll<HTMLButtonElement>(".quiz-option")];
-      const right = options.findIndex((b) => b.textContent!.endsWith(TERM_OF[prompt]));
+      const right = options.findIndex((b) => b.querySelector(".match-text")?.textContent === TERM_OF[prompt]);
+      // Mỗi đáp án chữ Hán có kana xanh bên dưới.
+      expect(options[right].querySelector(".kana-note")?.textContent).toBe(READING[TERM_OF[prompt]]);
       fireEvent.keyDown(window, { key: String(right + 1) });
       expect(options[right].className).toContain("correct");
       await settle();

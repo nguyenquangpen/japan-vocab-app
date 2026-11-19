@@ -1319,9 +1319,19 @@ button.danger:not(:disabled):hover {
 }
 
 .order-piece.placed .kana-note,
-.match-item.correct .kana-note {
+.match-item.correct .kana-note,
+.quiz-option.correct .kana-note,
+.quiz-option.wrong .kana-note {
   color: inherit;
   opacity: 0.85;
+}
+
+/* Đáp án bài Chọn từ đúng: chữ Hán + kana xanh xếp dọc, căn trái. */
+.option-text {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
 }
 
 /* Tôn trọng cài đặt giảm chuyển động của Windows. */

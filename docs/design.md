@@ -400,3 +400,4 @@ Theo hợp đồng v1 `docs/2026-11-07-japanese-app-integration.md`. App chỉ g
   - Lưu cấu hình Hub ⇒ sự kiện đang chờ được gửi lại ngay (xóa `next_attempt_at`) + gửi heartbeat; nút Lưu không chờ gửi xong.
   - Lệch nhỏ so với hợp đồng §5 (chấp nhận): sự kiện ghi vào outbox ngay sau khi lưu kết quả học (không cùng transaction vì plugin-sql không bảo đảm transaction qua nhiều lời gọi). Nếu app bị tắt đúng giữa lúc ghi outbox và đánh dấu từ đã báo, một từ Vững có thể bị báo 2 lần.
   - ureq với `max_redirects(0)` trả nguyên phản hồi 3xx (không theo, không lỗi).
+- **Kana xanh ở bài Chọn từ đúng** (2026-11-19): mỗi lựa chọn chữ Hán có kana nhỏ màu xanh bên dưới (`ChoiceQuestion.optionNotes`). Không áp dụng cho bài Điền từ: đáp án ở đó thường là dạng đã chia không có kana, hiện kana cho đáp án sai sẽ lộ đáp án đúng.

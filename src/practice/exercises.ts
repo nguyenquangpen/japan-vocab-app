@@ -82,6 +82,8 @@ export interface ChoiceQuestion {
   prompt: string;
   options: string[];
   answerIndex: number;
+  /** Kana nhỏ dưới từng lựa chọn (chỉ bài Chọn từ đúng; null nếu từ toàn kana / chưa có kana). */
+  optionNotes?: (string | null)[];
 }
 
 /** Ghép đáp án đúng với nhiễu (khác chữ nhau), bù bằng `fallback`, rồi xáo. null nếu không đủ 4 lựa chọn. */
@@ -99,6 +101,11 @@ function makeOptions(answer: string, distractors: string[], fallback: string[], 
 /** Chọn từ đúng (Việt → Nhật): đề là nghĩa, 4 lựa chọn là từ tiếng Nhật. */
 export function buildChoiceQuestions(words: ReviewItem[], count = 10, rng: Rng = Math.random): ChoiceQuestion[] {
   const norm = (m: string) => m.normalize("NFKC").trim().toLowerCase();
+  // Kana của từng từ để hiện nhỏ dưới chữ Hán (bỏ từ toàn kana / kana trùng chữ).
+  const kanaOf = new Map<string, string>();
+  for (const o of words) {
+    if (!o.kanaOnly && o.reading && o.reading !== o.term && !kanaOf.has(o.term)) kanaOf.set(o.term, o.reading);
+  }
   const questions: ChoiceQuestion[] = [];
   for (const w of shuffle(words, rng)) {
     if (questions.length >= count) break;
@@ -111,7 +118,12 @@ export function buildChoiceQuestions(words: ReviewItem[], count = 10, rng: Rng =
     ];
     const made = makeOptions(w.term, [], terms, rng);
     if (!made) continue;
-    questions.push({ wordId: w.wordId, prompt: w.meanings.join("; "), ...made });
+    questions.push({
+      wordId: w.wordId,
+      prompt: w.meanings.join("; "),
+      ...made,
+      optionNotes: made.options.map((o) => kanaOf.get(o) ?? null),
+    });
   }
   return questions;
 }
