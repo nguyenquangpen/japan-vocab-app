@@ -148,6 +148,21 @@ describe("clozeFromExamples / buildClozeQuestions", () => {
     expect(q.options[q.answerIndex]).toBe("猫");
     expect(q.options).toContain("犬");
     expect(q.prompt).toBe("＿＿が好きです。");
+    expect(q.optionNotes![q.answerIndex]).toBe("ねこ");
+  });
+
+  it("kana lựa chọn: ưu tiên cách đọc kèm câu, thiếu thì tra kho từ", () => {
+    const item = {
+      ...clozeFromExamples(withExample)[0],
+      answer: "食べた",
+      distractors: ["飲んだ", "猫"],
+      readings: { before: "", answer: "たべた", after: "がすきです。", distractors: ["のんだ", null] },
+    };
+    const [q] = buildClozeQuestions([item], withExample, 10, seeded());
+    const note = (o: string) => q.optionNotes![q.options.indexOf(o)];
+    expect(note("食べた")).toBe("たべた");
+    expect(note("飲んだ")).toBe("のんだ");
+    expect(note("猫")).toBe("ねこ");
   });
 
   it("dedupeCloze bỏ câu trùng", () => {

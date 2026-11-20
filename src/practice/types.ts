@@ -13,6 +13,16 @@ export interface ClozeItem {
   vi: string | null;
   /** Đáp án nhiễu (có thể rỗng: giao diện tự bù bằng từ khác trong phạm vi). */
   distractors: string[];
+  /** Cách đọc hiragana (câu ChatGPT tạo mới có; câu cũ / câu ví dụ thì không). */
+  readings?: ClozeReadings | null;
+}
+
+export interface ClozeReadings {
+  before: string;
+  answer: string;
+  after: string;
+  /** Cùng thứ tự với distractors; null nếu thiếu. */
+  distractors: (string | null)[];
 }
 
 /** Câu xếp mảnh: `pieces` theo đúng thứ tự; giao diện xáo trộn rồi để người học xếp lại. */

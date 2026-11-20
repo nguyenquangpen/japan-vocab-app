@@ -135,7 +135,10 @@ describe("PracticeTab", () => {
     expect(screen.getByText("Tôi thích mèo.")).toBeTruthy();
     const options = [...document.querySelectorAll<HTMLButtonElement>(".quiz-option")];
     expect(options).toHaveLength(4);
-    const wrong = options.findIndex((b) => !b.textContent!.endsWith("猫"));
+    const text = (b: HTMLButtonElement) => b.querySelector(".match-text")?.textContent;
+    // Đáp án chữ Hán có kana xanh bên dưới.
+    expect(options.find((b) => text(b) === "猫")!.querySelector(".kana-note")?.textContent).toBe(READING["猫"]);
+    const wrong = options.findIndex((b) => text(b) !== "猫");
     fireEvent.click(options[wrong]);
     expect(options[wrong].className).toContain("wrong");
     expect(document.querySelector(".cloze-sentence")!.textContent).toBe("猫が好きです。");

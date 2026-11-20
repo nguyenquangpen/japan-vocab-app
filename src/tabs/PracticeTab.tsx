@@ -590,6 +590,13 @@ function ChoiceRun({
             <span className="cloze-blank">{picked === null ? "＿＿" : item.answer}</span>
             {item.after}
           </div>
+          {item.readings && (
+            <div className="kana-note cloze-reading">
+              {item.readings.before}
+              {picked === null ? "＿＿" : item.readings.answer}
+              {item.readings.after}
+            </div>
+          )}
           {item.vi && <div className="muted">{item.vi}</div>}
         </div>
       ) : (

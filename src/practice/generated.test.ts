@@ -41,7 +41,7 @@ describe("buildPracticePrompt", () => {
     );
     expect(prompt).toContain("trình độ học viên: N4.");
     expect(prompt).toContain("Danh sách từ:\n食べる (たべる): ăn\n飲む\n");
-    expect(prompt).toContain('{"items":[{"term":"","cloze":[{"before":"","answer":"","after":"","vi":"","distractors":["","",""]}],"order":[{"pieces":["",""],"readings":["",""],"vi":""}]}]}');
+    expect(prompt).toContain('{"items":[{"term":"","cloze":[{"before":"","answer":"","after":"","beforeReading":"","answerReading":"","afterReading":"","vi":"","distractors":["","",""],"distractorReadings":["","",""]}],"order":[{"pieces":["",""],"readings":["",""],"vi":""}]}]}');
     expect(prompt).toContain("3–7 cụm");
     expect(prompt).toContain("Chỉ trả về JSON");
   });
@@ -58,7 +58,7 @@ describe("parsePracticeResponse", () => {
     const result = parsePracticeResponse(text, batch);
     expect(result).toEqual({
       ok: true,
-      items: [{ wordId: 1, cloze: [cloze], order: [order] }],
+      items: [{ wordId: 1, cloze: [{ ...cloze, readings: null }], order: [order] }],
       unmatched: ["走る"],
       missing: ["飲む"],
     });
@@ -105,6 +105,34 @@ describe("parsePracticeResponse", () => {
     const tooMany = { term: "食べる", cloze: [{ ...cloze, distractors: ["a", "b", "c", "d"] }] };
     expect(parsePracticeResponse(response(tooMany), batch)).toMatchObject({ ok: false });
     expect(parsePracticeResponse(response({ term: "食べる", cloze: [{ ...cloze, answer: "" }] }), batch)).toMatchObject({ ok: false });
+  });
+});
+
+describe("cách đọc câu điền từ", () => {
+  const batch = [{ id: 1, term: "食べる" }];
+  const withReadings = {
+    ...cloze,
+    beforeReading: "まいあさパンを",
+    answerReading: "たべます",
+    afterReading: "。",
+    distractorReadings: ["のみます", "", "かきます"],
+  };
+  const readings = { before: "まいあさパンを", answer: "たべます", after: "。", distractors: ["のみます", null, "かきます"] };
+
+  it("parse, lưu rồi đọc lại đủ cách đọc", async () => {
+    const result = parsePracticeResponse(response({ term: "食べる", cloze: [withReadings] }), batch);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.items[0].cloze[0].readings).toEqual(readings);
+    const db = createTestDb();
+    const a = await addWord(db, "食べる");
+    await savePracticeItems(db, [{ ...result.items[0], wordId: a }]);
+    expect((await loadCloze(db, [a]))[0].readings).toEqual(readings);
+  });
+
+  it("thiếu cách đọc đáp án thì bỏ cách đọc câu", () => {
+    const result = parsePracticeResponse(response({ term: "食べる", cloze: [{ ...withReadings, answerReading: "" }] }), batch);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.items[0].cloze[0].readings).toBeNull();
   });
 });
 

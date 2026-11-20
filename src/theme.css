@@ -1318,6 +1318,12 @@ button.danger:not(:disabled):hover {
   color: var(--good);
 }
 
+/* Kana của cả câu Điền từ, dưới câu đề. */
+.cloze-reading {
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
 .order-piece.placed .kana-note,
 .match-item.correct .kana-note,
 .quiz-option.correct .kana-note,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Db } from "../db/db";
 import { normalizeText } from "../vocab/text";
-import type { ClozeItem, OrderItem } from "./types";
+import type { ClozeItem, ClozeReadings, OrderItem } from "./types";
 
 // Câu luyện tập do ChatGPT tạo qua copy–paste (docs/design.md mục 5). Không đụng cards/review_logs.
 
@@ -24,6 +24,8 @@ Với mỗi từ dưới đây, tạo bài luyện tập theo đúng định d�
 - cloze: 2 câu điền từ. before + answer + after ghép lại phải là một câu tiếng Nhật tự nhiên, đầy đủ.
   answer là chính từ đó đúng như trong câu (có thể đã chia, vd. 食べた).
   distractors: 3 từ sai nhưng hợp lý, cùng từ loại với answer.
+  beforeReading, answerReading, afterReading: cách đọc hiragana của before, answer, after.
+  distractorReadings: cách đọc hiragana của từng distractor, cùng thứ tự.
 - order: 1 câu xếp mảnh. pieces gồm 3–7 cụm (kiểu bunsetsu, trợ từ dính vào cụm trước), ghép theo thứ tự đúng phải ra nguyên câu.
   readings: cách đọc hiragana của từng mảnh, cùng số phần tử và cùng thứ tự với pieces.
 - vi: bản dịch tiếng Việt của cả câu.
@@ -35,7 +37,7 @@ Danh sách từ:
 ${list}
 
 Định dạng:
-{"items":[{"term":"","cloze":[{"before":"","answer":"","after":"","vi":"","distractors":["","",""]}],"order":[{"pieces":["",""],"readings":["",""],"vi":""}]}]}`;
+{"items":[{"term":"","cloze":[{"before":"","answer":"","after":"","beforeReading":"","answerReading":"","afterReading":"","vi":"","distractors":["","",""],"distractorReadings":["","",""]}],"order":[{"pieces":["",""],"readings":["",""],"vi":""}]}]}`;
 }
 
 const text = (max: number, label: string) =>
@@ -50,6 +52,13 @@ const clozeSchema = z.object({
     .array(text(30, "cloze.distractors"), { error: "cloze.distractors phải là mảng." })
     .max(3, { error: "cloze.distractors tối đa 3 từ." })
     .default([]),
+  beforeReading: text(200, "cloze.beforeReading").nullish(),
+  answerReading: text(200, "cloze.answerReading").nullish(),
+  afterReading: text(200, "cloze.afterReading").nullish(),
+  distractorReadings: z
+    .array(text(60, "cloze.distractorReadings").nullish(), { error: "cloze.distractorReadings phải là mảng." })
+    .max(3, { error: "cloze.distractorReadings tối đa 3 phần tử." })
+    .nullish(),
 });
 
 const orderSchema = z.object({
@@ -125,13 +134,28 @@ export function parsePracticeResponse(text: string, batch: { id: number; term: s
     }
     matched.add(pick.id);
     const cloze = item.cloze
-      .map((c) => ({
-        before: c.before.trim(),
-        answer: c.answer.trim(),
-        after: c.after.trim(),
-        vi: clean(c.vi),
-        distractors: c.distractors.map((d) => d.trim()).filter((d) => d !== ""),
-      }))
+      .map((c) => {
+        const pairs = c.distractors
+          .map((d, i) => ({ d: d.trim(), r: (c.distractorReadings?.[i] ?? "").trim() || null }))
+          .filter((x) => x.d !== "");
+        const before = c.before.trim();
+        const after = c.after.trim();
+        const answerReading = (c.answerReading ?? "").trim();
+        // Giữ cách đọc câu khi có đọc đáp án và đọc phần không rỗng tương ứng.
+        const beforeReading = (c.beforeReading ?? "").trim();
+        const afterReading = (c.afterReading ?? "").trim();
+        const ok = answerReading !== "" && (before === "" || beforeReading !== "") && (after === "" || afterReading !== "");
+        return {
+          before,
+          answer: c.answer.trim(),
+          after,
+          vi: clean(c.vi),
+          distractors: pairs.map((x) => x.d),
+          readings: ok
+            ? { before: before === "" ? "" : beforeReading, answer: answerReading, after: after === "" ? "" : afterReading, distractors: pairs.map((x) => x.r) }
+            : null,
+        };
+      })
       // Bỏ câu rỗng đáp án hoặc câu mà phần còn lại vẫn chứa đáp án (lộ đáp án).
       .filter((c) => c.answer !== "" && !`${c.before}${c.after}`.includes(c.answer));
     const order = item.order
@@ -189,7 +213,7 @@ export async function savePracticeItems(db: Db, items: ParsedPractice[], now = n
   const rows: unknown[][] = [];
   for (const item of items) {
     for (const c of item.cloze) {
-      const data = { before: c.before, answer: c.answer, after: c.after, distractors: c.distractors };
+      const data = { before: c.before, answer: c.answer, after: c.after, distractors: c.distractors, readings: c.readings ?? null };
       rows.push([item.wordId, "cloze", JSON.stringify(data), c.vi, createdAt]);
     }
     for (const o of item.order) rows.push([item.wordId, "order", JSON.stringify({ pieces: o.pieces, readings: o.readings }), o.vi, createdAt]);
@@ -230,6 +254,14 @@ function parseJson(value: string): Record<string, unknown> | null {
 
 const isStringArray = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 
+function parseClozeReadings(v: unknown): ClozeReadings | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const r = v as Record<string, unknown>;
+  if (typeof r.before !== "string" || typeof r.answer !== "string" || typeof r.after !== "string") return null;
+  const ds = Array.isArray(r.distractors) ? r.distractors.map((x) => (typeof x === "string" && x !== "" ? x : null)) : [];
+  return { before: r.before, answer: r.answer, after: r.after, distractors: ds };
+}
+
 export async function loadCloze(db: Db, wordIds: number[]): Promise<ClozeItem[]> {
   const out: ClozeItem[] = [];
   for (const row of await loadRows(db, wordIds, "cloze")) {
@@ -245,6 +277,7 @@ export async function loadCloze(db: Db, wordIds: number[]): Promise<ClozeItem[]>
       after: d.after,
       vi: row.vi,
       distractors: isStringArray(d.distractors) ? d.distractors : [],
+      readings: parseClozeReadings(d.readings),
     });
   }
   return out;

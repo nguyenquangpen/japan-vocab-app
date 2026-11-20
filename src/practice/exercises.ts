@@ -82,7 +82,7 @@ export interface ChoiceQuestion {
   prompt: string;
   options: string[];
   answerIndex: number;
-  /** Kana nhỏ dưới từng lựa chọn (chỉ bài Chọn từ đúng; null nếu từ toàn kana / chưa có kana). */
+  /** Kana nhỏ dưới từng lựa chọn (Chọn từ đúng, Điền từ; null nếu từ toàn kana / chưa có kana). */
   optionNotes?: (string | null)[];
 }
 
@@ -98,14 +98,21 @@ function makeOptions(answer: string, distractors: string[], fallback: string[], 
   return { options: shuffled, answerIndex: shuffled.indexOf(answer) };
 }
 
-/** Chọn từ đúng (Việt → Nhật): đề là nghĩa, 4 lựa chọn là từ tiếng Nhật. */
-export function buildChoiceQuestions(words: ReviewItem[], count = 10, rng: Rng = Math.random): ChoiceQuestion[] {
-  const norm = (m: string) => m.normalize("NFKC").trim().toLowerCase();
-  // Kana của từng từ để hiện nhỏ dưới chữ Hán (bỏ từ toàn kana / kana trùng chữ).
+/** Kana của từng từ để hiện nhỏ dưới chữ Hán (bỏ từ toàn kana / kana trùng chữ). */
+function kanaMap(words: ReviewItem[]): Map<string, string> {
   const kanaOf = new Map<string, string>();
   for (const o of words) {
     if (!o.kanaOnly && o.reading && o.reading !== o.term && !kanaOf.has(o.term)) kanaOf.set(o.term, o.reading);
   }
+  return kanaOf;
+}
+
+const HAS_KANJI = /[㐀-鿿豈-﫿々]/;
+
+/** Chọn từ đúng (Việt → Nhật): đề là nghĩa, 4 lựa chọn là từ tiếng Nhật. */
+export function buildChoiceQuestions(words: ReviewItem[], count = 10, rng: Rng = Math.random): ChoiceQuestion[] {
+  const norm = (m: string) => m.normalize("NFKC").trim().toLowerCase();
+  const kanaOf = kanaMap(words);
   const questions: ChoiceQuestion[] = [];
   for (const w of shuffle(words, rng)) {
     if (questions.length >= count) break;
@@ -163,12 +170,33 @@ export function buildClozeQuestions(
   rng: Rng = Math.random,
 ): ClozeQuestion[] {
   const terms = [...new Set(words.map((w) => w.term))];
+  const kanaOf = kanaMap(words);
   const questions: ClozeQuestion[] = [];
   for (const item of shuffle(items, rng)) {
     if (questions.length >= count) break;
     const made = makeOptions(item.answer, item.distractors, terms, rng);
     if (!made) continue;
-    questions.push({ wordId: item.wordId, prompt: `${item.before}＿＿${item.after}`, item, ...made });
+    // Kana dưới lựa chọn có chữ Hán: ưu tiên cách đọc ChatGPT tạo kèm câu, thiếu thì tra kho từ.
+    const own = new Map<string, string>();
+    const r = item.readings;
+    if (r) {
+      own.set(item.answer, r.answer);
+      item.distractors.forEach((d, i) => {
+        if (r.distractors[i]) own.set(d, r.distractors[i]!);
+      });
+    }
+    const noteOf = (o: string) => {
+      if (!HAS_KANJI.test(o)) return null;
+      const k = own.get(o) ?? kanaOf.get(o) ?? null;
+      return k && k !== o ? k : null;
+    };
+    questions.push({
+      wordId: item.wordId,
+      prompt: `${item.before}＿＿${item.after}`,
+      item,
+      ...made,
+      optionNotes: made.options.map(noteOf),
+    });
   }
   return questions;
 }
